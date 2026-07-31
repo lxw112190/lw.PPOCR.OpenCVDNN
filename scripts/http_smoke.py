@@ -58,17 +58,25 @@ def main() -> int:
         if platform.system() == "Windows" else "lw-ppocr-http-service")
     source_config = json.loads(
         (package / "http-service.json").read_text(encoding="utf-8"))
-    source_config["port"] = args.port
+    source_config["port"] = args.port + 1 if args.port < 65535 else args.port - 1
     config_path = package / f".http-smoke-{os.getpid()}.json"
     config_path.write_text(
         json.dumps(source_config, ensure_ascii=False, indent=2), encoding="utf-8")
+    process_environment = os.environ.copy()
+    process_environment.update({
+        "LW_PPOCR_LISTEN_HOST": "127.0.0.1",
+        "LW_PPOCR_PORT": str(args.port),
+        "LW_PPOCR_API_KEY": "",
+        "LW_PPOCR_WORKER_THREADS": "2",
+        "LW_PPOCR_FILE_LOGGING_ENABLED": "false",
+    })
     process = None
     completed = False
     try:
         process = subprocess.Popen(
             [str(binary), "--config", str(config_path)], cwd=package,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            encoding="utf-8", errors="replace")
+            encoding="utf-8", errors="replace", env=process_environment)
         health = None
         for _ in range(120):
             if process.poll() is not None:
@@ -152,6 +160,9 @@ def main() -> int:
                 assert "758616458" not in output
                 if completed:
                     assert "request_started" in output
+                    assert f"port: {args.port}" in output
+                    assert "worker_threads: 2" in output
+                    assert "logging.file_enabled: false" in output
                 print("--- service output ---")
                 print(output)
         config_path.unlink(missing_ok=True)

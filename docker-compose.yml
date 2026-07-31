@@ -1,0 +1,39 @@
+services:
+  ppocr:
+    image: ${PPOCR_IMAGE:-ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.2.0}
+    ports:
+      - "${PPOCR_PORT:-8787}:8787"
+    environment:
+      LW_PPOCR_LISTEN_HOST: "0.0.0.0"
+      LW_PPOCR_PORT: "8787"
+      LW_PPOCR_API_KEY: "${PPOCR_API_KEY:-}"
+      LW_PPOCR_ENGINE_INSTANCES: "${PPOCR_ENGINE_INSTANCES:-1}"
+      LW_PPOCR_WORKER_THREADS: "${PPOCR_WORKER_THREADS:-4}"
+      LW_PPOCR_LOG_FILE: "/data/logs/lw-ppocr.log"
+      LW_PPOCR_LOGGING_ENABLED: "${PPOCR_LOGGING_ENABLED:-true}"
+      LW_PPOCR_FILE_LOGGING_ENABLED: "${PPOCR_FILE_LOGGING_ENABLED:-true}"
+      LW_PPOCR_REQUEST_LOGGING_ENABLED: "${PPOCR_REQUEST_LOGGING_ENABLED:-true}"
+    volumes:
+      - ppocr-logs:/data/logs
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8787/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  ppocr-logs:

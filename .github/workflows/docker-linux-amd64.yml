@@ -1,0 +1,152 @@
+name: Docker Linux AMD64
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PACKAGE_VERSION: 0.2.0
+  IMAGE_NAME: ghcr.io/lxw112190/lw.ppocr.opencvdnn
+
+jobs:
+  docker-linux-amd64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate Docker files
+        run: |
+          bash -n scripts/package_docker.sh
+          docker compose -f docker-compose.yml config >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: |
+            lw-ppocr-opencvdnn:ci
+            ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ env.PACKAGE_VERSION }}
+            OPENCV_VERSION=5.0.0
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Compose and real OCR smoke test
+        env:
+          COMPOSE_PROJECT_NAME: lwppocrci
+          PPOCR_IMAGE: lw-ppocr-opencvdnn:ci
+          PPOCR_PORT: "18789"
+          PPOCR_API_KEY: ci-secret-value
+          PPOCR_ENGINE_INSTANCES: "1"
+          PPOCR_WORKER_THREADS: "2"
+          PPOCR_FILE_LOGGING_ENABLED: "true"
+        run: |
+          cleanup() {
+            docker compose -f docker-compose.yml down -v || true
+          }
+          trap cleanup EXIT
+          docker compose -f docker-compose.yml up -d --no-build
+
+          ready=0
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:18789/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker compose -f docker-compose.yml logs ppocr
+            exit 1
+          fi
+
+          status="$(curl --silent --output /tmp/unauthorized.json \
+            --write-out '%{http_code}' \
+            -H 'Content-Type: image/jpeg' \
+            --data-binary @models/ppocrv6-tiny/sample.jpg \
+            http://127.0.0.1:18789/api/ocr)"
+          test "$status" = "401"
+
+          curl --fail --silent --show-error \
+            -H 'X-API-Key: ci-secret-value' \
+            -H 'Content-Type: image/jpeg' \
+            --data-binary @models/ppocrv6-tiny/sample.jpg \
+            http://127.0.0.1:18789/api/ocr > /tmp/ocr.json
+          python3 - <<'PY'
+          import json
+          with open('/tmp/ocr.json', encoding='utf-8') as stream:
+              result = json.load(stream)
+          assert result['ok'] is True
+          assert result['backend'] == 'opencv-dnn'
+          assert result['result'] and result['result'][0]['text']
+          assert len(result['result'][0]['box']) == 4
+          PY
+
+          test "$(docker compose -f docker-compose.yml exec -T ppocr id -u)" = "10001"
+          docker compose -f docker-compose.yml logs ppocr > /tmp/container.log
+          grep -F '819069052' /tmp/container.log
+          grep -F 'listen_host: 0.0.0.0' /tmp/container.log
+          grep -F 'api_key: configured' /tmp/container.log
+          if grep -F 'ci-secret-value' /tmp/container.log; then
+            echo 'API Key leaked into container logs' >&2
+            exit 1
+          fi
+
+      - name: Package Compose deployment files
+        run: bash scripts/package_docker.sh dist "$PACKAGE_VERSION"
+
+      - name: Log in to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish versioned image
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          DOCKER_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            test -z "$tag" || docker push "$tag"
+          done <<< "$DOCKER_TAGS"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-docker-linux-amd64
+          path: |
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-docker-linux-amd64.tar.gz
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-docker-linux-amd64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14

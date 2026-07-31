@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(lw.PPOCR.OpenCVDNN VERSION 0.1.0 LANGUAGES C CXX)
+project(lw.PPOCR.OpenCVDNN VERSION 0.2.0 LANGUAGES C CXX)
 
 option(LW_PPOCR_BUILD_HTTP_SERVICE "Build the cpp-httplib HTTP service" ON)
 option(LW_PPOCR_BUILD_EXAMPLES "Build native examples" ON)
@@ -122,6 +122,7 @@ install(FILES http-service.json DESTINATION .)
 install(FILES README.md README.en.md LICENSE THIRD-PARTY-NOTICES.md DESTINATION .)
 install(FILES docs/assets/sponsor.jpg DESTINATION docs/assets)
 install(FILES docs/HTTP-API.md DESTINATION docs)
+install(FILES docs/DOCKER.md DESTINATION docs)
 install(FILES docs/LOGGING.md DESTINATION docs)
 install(DIRECTORY examples/python DESTINATION examples)
 install(DIRECTORY examples/csharp DESTINATION examples

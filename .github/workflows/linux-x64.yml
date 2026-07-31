@@ -14,7 +14,7 @@ concurrency:
 
 env:
   OPENCV_VERSION: 5.0.0
-  PACKAGE_VERSION: 0.1.0
+  PACKAGE_VERSION: 0.2.0
 
 jobs:
   ubuntu-20-04:

@@ -63,6 +63,6 @@ for binary in "$package_dir/lw-ppocr-http-service" \
 done
 
 tar -C "$output_dir" -czf "${output_dir}/${package_name}.tar.gz" "$package_name"
-sha256sum "${output_dir}/${package_name}.tar.gz" \
-  > "${output_dir}/${package_name}.tar.gz.sha256"
+(cd "$output_dir" && \
+  sha256sum "${package_name}.tar.gz" > "${package_name}.tar.gz.sha256")
 echo "Created ${output_dir}/${package_name}.tar.gz"

@@ -1,6 +1,8 @@
 /build/
 /dist/
 /logs/
+/data/
+/.env
 /.cache/
 .vs/
 .vscode/

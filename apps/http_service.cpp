@@ -18,6 +18,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -140,6 +141,82 @@ fs::path ResolvePath(const fs::path& base, const std::string& value) {
     return fs::weakly_canonical(path);
 }
 
+uint64_t EnvironmentUnsigned(const char* name, uint64_t current) {
+    const char* raw = std::getenv(name);
+    if (raw == nullptr) return current;
+    const std::string text(raw);
+    size_t consumed = 0;
+    try {
+        const unsigned long long value = std::stoull(text, &consumed, 10);
+        if (text.empty() || consumed != text.size()) {
+            throw std::invalid_argument("trailing characters");
+        }
+        return static_cast<uint64_t>(value);
+    } catch (const std::exception&) {
+        throw std::runtime_error(std::string("invalid unsigned integer in ") +
+            name);
+    }
+}
+
+bool EnvironmentBoolean(const char* name, bool current) {
+    const char* raw = std::getenv(name);
+    if (raw == nullptr) return current;
+    std::string value(raw);
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+    if (value == "1" || value == "true" || value == "yes" || value == "on") {
+        return true;
+    }
+    if (value == "0" || value == "false" || value == "no" || value == "off") {
+        return false;
+    }
+    throw std::runtime_error(std::string("invalid boolean in ") + name);
+}
+
+void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
+    if (const char* value = std::getenv("LW_PPOCR_LISTEN_HOST")) {
+        config.listen_host = value;
+    }
+    const uint64_t port = EnvironmentUnsigned("LW_PPOCR_PORT", config.port);
+    if (port > static_cast<uint64_t>((std::numeric_limits<int>::max)())) {
+        throw std::runtime_error("LW_PPOCR_PORT is out of range");
+    }
+    config.port = static_cast<int>(port);
+    if (const char* value = std::getenv("LW_PPOCR_MODEL_MANIFEST")) {
+        config.model_manifest = ResolvePath(base, value);
+    }
+    if (const char* value = std::getenv("LW_PPOCR_WEB_ROOT")) {
+        config.web_root = ResolvePath(base, value);
+    }
+    if (const char* value = std::getenv("LW_PPOCR_API_KEY")) {
+        config.api_key = value;
+    }
+    config.engine_instances = static_cast<size_t>(EnvironmentUnsigned(
+        "LW_PPOCR_ENGINE_INSTANCES", config.engine_instances));
+    config.worker_threads = static_cast<size_t>(EnvironmentUnsigned(
+        "LW_PPOCR_WORKER_THREADS", config.worker_threads));
+    config.max_request_bytes = static_cast<size_t>(EnvironmentUnsigned(
+        "LW_PPOCR_MAX_REQUEST_BYTES", config.max_request_bytes));
+    config.max_image_pixels = EnvironmentUnsigned(
+        "LW_PPOCR_MAX_IMAGE_PIXELS", config.max_image_pixels);
+    config.logging.enabled = EnvironmentBoolean(
+        "LW_PPOCR_LOGGING_ENABLED", config.logging.enabled);
+    config.logging.console = EnvironmentBoolean(
+        "LW_PPOCR_CONSOLE_LOGGING_ENABLED", config.logging.console);
+    config.logging.file_enabled = EnvironmentBoolean(
+        "LW_PPOCR_FILE_LOGGING_ENABLED", config.logging.file_enabled);
+    config.logging.request_enabled = EnvironmentBoolean(
+        "LW_PPOCR_REQUEST_LOGGING_ENABLED", config.logging.request_enabled);
+    if (const char* value = std::getenv("LW_PPOCR_LOG_FILE")) {
+        if (*value == '\0') {
+            throw std::runtime_error("LW_PPOCR_LOG_FILE must not be empty");
+        }
+        config.logging.file_path = ResolvePath(base, value).u8string();
+    }
+}
+
 ServiceConfig LoadConfig(const fs::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
@@ -206,6 +283,8 @@ ServiceConfig LoadConfig(const fs::path& path) {
             "file_path", config.logging.file_path);
         config.logging.file_path = ResolvePath(base, log_path).u8string();
     }
+
+    ApplyEnvironmentOverrides(config, base);
 
     if (config.port < 1 || config.port > 65535 ||
         config.worker_threads < 1 || config.worker_threads > 128 ||

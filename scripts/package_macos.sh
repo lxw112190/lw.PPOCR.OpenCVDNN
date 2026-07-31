@@ -64,6 +64,6 @@ while IFS= read -r -d '' binary; do
 done < <(find "$package_dir" -type f -print0)
 
 tar -C "$output_dir" -czf "${output_dir}/${package_name}.tar.gz" "$package_name"
-shasum -a 256 "${output_dir}/${package_name}.tar.gz" \
-  > "${output_dir}/${package_name}.tar.gz.sha256"
+(cd "$output_dir" && \
+  shasum -a 256 "${package_name}.tar.gz" > "${package_name}.tar.gz.sha256")
 echo "Created ${output_dir}/${package_name}.tar.gz"
