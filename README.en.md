@@ -145,4 +145,4 @@ Project code is MIT licensed. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.m
 - QQ Group: C# 人工智能实践 | 758616458
 - Project: <https://github.com/lxw112190/lw.PPOCR.OpenCVDNN>
 
-![Sponsor QR code](docs/assets/sponsor.jpg)
+<img src="docs/assets/sponsor.jpg" alt="Sponsor QR code" width="240">

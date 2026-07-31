@@ -7,9 +7,18 @@ import json
 import pathlib
 import platform
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
+
+
+def configure_utf8_output() -> None:
+    """Keep CI logs printable when OCR or service output contains Unicode."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
 
 
 def request_json(url: str, body=None):
@@ -22,6 +31,7 @@ def request_json(url: str, body=None):
 
 
 def main() -> int:
+    configure_utf8_output()
     parser = argparse.ArgumentParser()
     parser.add_argument("--package-dir", type=pathlib.Path, required=True)
     parser.add_argument("--port", type=int, default=8787)

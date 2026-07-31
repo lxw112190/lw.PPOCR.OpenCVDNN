@@ -185,4 +185,4 @@ Linux CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键
 
 如果项目对你有帮助，可以扫码支持维护：
 
-![捐赠二维码](docs/assets/sponsor.jpg)
+<img src="docs/assets/sponsor.jpg" alt="捐赠二维码" width="240">
