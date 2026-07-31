@@ -137,6 +137,12 @@
     status.textContent = `服务就绪：${data.backend_name || data.backend}；API Key：${apiKeyRequired ? '已启用，请填写' : '未启用'}`;
   }).catch(error => { status.textContent = `服务检查失败：${error}`; });
 
+  function readBox(region) {
+    if (!Array.isArray(region?.box) || region.box.length !== 4) return null;
+    const points = region.box.map(point => [Number(point?.x), Number(point?.y)]);
+    return points.every(point => point.every(Number.isFinite)) ? points : null;
+  }
+
   function redraw(regions = lastRegions) {
     if (!sourceImage.naturalWidth) return;
     const scale = Math.min(1, 1600 / sourceImage.naturalWidth);
@@ -149,8 +155,9 @@
     ctx.lineWidth = Math.max(2, canvas.width / 650);
     ctx.font = `${Math.max(13, Math.round(canvas.width / 65))}px "Microsoft YaHei UI", sans-serif`;
     regions.forEach((region, index) => {
-      const points = [1, 2, 3, 4].map(i => [Number(region['x' + i]) * sx, Number(region['y' + i]) * sy]);
-      if (!points.every(p => p.every(Number.isFinite))) return;
+      const sourcePoints = readBox(region);
+      if (!sourcePoints) return;
+      const points = sourcePoints.map(([x, y]) => [x * sx, y * sy]);
       ctx.beginPath(); ctx.moveTo(...points[0]); points.slice(1).forEach(p => ctx.lineTo(...p)); ctx.closePath();
       ctx.strokeStyle = '#18e1a5'; ctx.stroke();
       const label = `${index + 1} ${region.text || ''}`;
@@ -208,8 +215,8 @@
       const items = Array.isArray(data.result) ? data.result : [];
       items.forEach((item, index) => {
         const tr = document.createElement('tr');
-        const hasBox = !recognitionOnly && Number.isFinite(Number(item.x1));
-        const points = hasBox ? [1, 2, 3, 4].map(i => `(${Number(item['x' + i]).toFixed(0)}, ${Number(item['y' + i]).toFixed(0)})`).join(' ') : '—';
+        const box = recognitionOnly ? null : readBox(item);
+        const points = box ? box.map(([x, y]) => `(${x.toFixed(0)}, ${y.toFixed(0)})`).join(' ') : '—';
         addCell(tr, index + 1); addCell(tr, item.text || '');
         addCell(tr, Number(item.score || 0).toFixed(4));
         addCell(tr, `${item.cls_label ?? -1} / ${Number(item.cls_score || 0).toFixed(4)}`);

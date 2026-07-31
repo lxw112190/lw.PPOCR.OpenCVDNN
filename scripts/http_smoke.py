@@ -42,6 +42,7 @@ def main() -> int:
     process = subprocess.Popen(
         [str(binary)], cwd=package, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+    completed = False
     try:
         health = None
         for _ in range(120):
@@ -82,6 +83,17 @@ def main() -> int:
             bad_image_status = error.code
         assert health["ok"] and health["backend"] == "opencv-dnn"
         assert ocr["ok"] and ocr["result"] and ocr["result"][0]["text"]
+        legacy_box_keys = {
+            f"{axis}{index}" for axis in ("x", "y") for index in range(1, 5)
+        }
+        for item in ocr["result"]:
+            assert isinstance(item.get("box"), list) and len(item["box"]) == 4
+            assert all(
+                isinstance(point, dict) and
+                isinstance(point.get("x"), (int, float)) and
+                isinstance(point.get("y"), (int, float))
+                for point in item["box"])
+            assert legacy_box_keys.isdisjoint(item)
         assert recognize["ok"] and recognize["result"]
         assert batch["ok"] and len(batch["result"]) == 2
         assert bad_image_status == 400
@@ -95,6 +107,7 @@ def main() -> int:
             "invalid_image_status": bad_image_status,
             "server_total_ms": ocr["timing"]["server_total_ms"],
         }, ensure_ascii=False, indent=2))
+        completed = True
         return 0
     finally:
         process.terminate()
@@ -106,7 +119,8 @@ def main() -> int:
         if process.stdout:
             output = process.stdout.read()
             assert "758616458" not in output
-            assert "request_started" in output
+            if completed:
+                assert "request_started" in output
             print("--- service output ---")
             print(output)
 

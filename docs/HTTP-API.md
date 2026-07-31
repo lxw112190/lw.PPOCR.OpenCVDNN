@@ -21,6 +21,27 @@ Runs text detection, optional direction classification, and recognition.
 The response contains the source image size, ordered text regions, four-point
 boxes, confidence scores, stage timings, and a request ID.
 
+Each detected region uses one canonical `box` field. Its four points are in
+source-image pixel coordinates and ordered as top-left, top-right,
+bottom-right, and bottom-left:
+
+```json
+{
+  "text": "发动机最大净功率为85kW公告批次：389",
+  "score": 0.9263,
+  "cls_label": 0,
+  "cls_score": 0.9999,
+  "box": [
+    {"x": 256.19, "y": 2638.31},
+    {"x": 944.79, "y": 2641.89},
+    {"x": 944.52, "y": 2696.29},
+    {"x": 255.92, "y": 2692.71}
+  ]
+}
+```
+
+The legacy flattened `x1`...`x4` and `y1`...`y4` fields are not emitted.
+
 ## `POST /api/recognize`
 
 Recognizes already-cropped text-line images without running detection.

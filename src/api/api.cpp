@@ -96,8 +96,6 @@ json OcrJson(
                 {"x", region.box[index].x},
                 {"y", region.box[index].y}
             });
-            item["x" + std::to_string(index + 1)] = region.box[index].x;
-            item["y" + std::to_string(index + 1)] = region.box[index].y;
         }
         items.push_back(std::move(item));
     }
