@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
@@ -26,6 +27,9 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <unistd.h>
 #else
 #include <limits.h>
 #include <unistd.h>
@@ -89,6 +93,16 @@ fs::path ExecutablePath() {
     }
     buffer.resize(length);
     return fs::path(buffer);
+#elif defined(__APPLE__)
+    uint32_t size = 1024;
+    std::vector<char> buffer(size, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size) != 0) {
+        buffer.assign(size, '\0');
+        if (_NSGetExecutablePath(buffer.data(), &size) != 0) {
+            throw std::runtime_error("unable to determine executable path");
+        }
+    }
+    return fs::weakly_canonical(fs::u8path(buffer.data()));
 #else
     std::vector<char> buffer(PATH_MAX + 1u, '\0');
     const ssize_t length = readlink("/proc/self/exe", buffer.data(), PATH_MAX);
@@ -97,6 +111,25 @@ fs::path ExecutablePath() {
     }
     return fs::u8path(std::string(buffer.data(), static_cast<size_t>(length)));
 #endif
+}
+
+std::string RequestMediaType(const httplib::Request& request) {
+    std::string value = request.get_header_value("Content-Type");
+    const size_t separator = value.find(';');
+    if (separator != std::string::npos) value.resize(separator);
+    value.erase(std::remove_if(value.begin(), value.end(),
+        [](unsigned char character) { return std::isspace(character) != 0; }),
+        value.end());
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+    return value;
+}
+
+bool IsBinaryImageMediaType(const std::string& media_type) {
+    return media_type == "application/octet-stream" ||
+        (media_type.size() >= 6 && media_type.compare(0, 6, "image/") == 0);
 }
 
 fs::path ResolvePath(const fs::path& base, const std::string& value) {
@@ -196,12 +229,16 @@ ServiceConfig LoadConfig(const fs::path& path) {
 }
 
 std::string LastError(lw_ppocr_handle handle) {
-    const uint64_t required = lw_ppocr_get_last_error(handle, nullptr, 0);
+    std::vector<char> buffer(4096, '\0');
+    const uint64_t required = lw_ppocr_get_last_error(
+        handle, buffer.data(), buffer.size());
     if (required == 0 || required > 1024u * 1024u) {
         return "unknown OCR error";
     }
-    std::vector<char> buffer(static_cast<size_t>(required));
-    lw_ppocr_get_last_error(handle, buffer.data(), required);
+    if (required > buffer.size()) {
+        buffer.assign(static_cast<size_t>(required), '\0');
+        lw_ppocr_get_last_error(handle, buffer.data(), buffer.size());
+    }
     return std::string(buffer.data());
 }
 
@@ -494,8 +531,10 @@ void PrintStartupInfo(const ServiceConfig& config) {
         << "  logging.request_enabled: "
         << config.logging.request_enabled << '\n'
         << "Request parameters / 请求参数\n"
-        << "  POST /api/ocr: {\"image_base64\":\"...\"}\n"
-        << "  POST /api/recognize: {\"image_base64\":\"...\"}\n"
+        << "  POST /api/ocr JSON: {\"image_base64\":\"...\"}\n"
+        << "  POST /api/ocr binary: image/* or application/octet-stream\n"
+        << "  POST /api/recognize JSON: {\"image_base64\":\"...\"}\n"
+        << "  POST /api/recognize binary: image/* or application/octet-stream\n"
         << "  POST /api/recognize batch: {\"images_base64\":[\"...\"]}\n"
         << "  authentication: X-API-Key header when api_key is configured\n"
         << "============================================================\n"
@@ -512,48 +551,62 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
         LogRequest(request, response.status, request_id, start);
         return;
     }
+    const std::string media_type = RequestMediaType(request);
+    const bool binary_request = IsBinaryImageMediaType(media_type);
     try {
-        const json body = json::parse(request.body);
         json native;
-        if (!body.is_object()) {
-            throw std::invalid_argument("JSON request must be an object");
-        }
-
-        if (recognition_only && body.contains("images_base64")) {
-            const json& values = body.at("images_base64");
-            if (!values.is_array() || values.empty() || values.size() > 256) {
-                throw std::invalid_argument(
-                    "images_base64 must contain 1 to 256 strings");
+        if (binary_request) {
+            if (request.body.empty()) {
+                throw std::invalid_argument("binary image body is empty");
             }
-            std::vector<std::vector<uint8_t>> images(values.size());
-            std::string error;
-            for (size_t index = 0; index < values.size(); ++index) {
-                if (!values[index].is_string() ||
-                    !lw::ppocr::http::DecodeBase64(values[index].get_ref<
-                        const std::string&>(), config.max_request_bytes,
-                        images[index], error)) {
-                    throw std::invalid_argument("image " +
-                        std::to_string(index) + ": " +
-                        (error.empty() ? "Base64 string is required" : error));
-                }
-            }
-            auto lease = engines.Acquire();
-            native = CallRecognizeBatch(lease.get(), images);
-            native["image_count"] = images.size();
-        } else {
-            if (!body.contains("image_base64") ||
-                !body.at("image_base64").is_string()) {
-                throw std::invalid_argument("image_base64 string is required");
-            }
-            std::vector<uint8_t> encoded;
-            std::string error;
-            if (!lw::ppocr::http::DecodeBase64(
-                    body.at("image_base64").get_ref<const std::string&>(),
-                    config.max_request_bytes, encoded, error)) {
-                throw std::invalid_argument(error);
-            }
+            const std::vector<uint8_t> encoded(
+                request.body.begin(), request.body.end());
             auto lease = engines.Acquire();
             native = CallOcr(lease.get(), encoded, recognition_only);
+        } else {
+            const json body = json::parse(request.body);
+            if (!body.is_object()) {
+                throw std::invalid_argument("JSON request must be an object");
+            }
+
+            if (recognition_only && body.contains("images_base64")) {
+                const json& values = body.at("images_base64");
+                if (!values.is_array() || values.empty() || values.size() > 256) {
+                    throw std::invalid_argument(
+                        "images_base64 must contain 1 to 256 strings");
+                }
+                std::vector<std::vector<uint8_t>> images(values.size());
+                std::string error;
+                for (size_t index = 0; index < values.size(); ++index) {
+                    if (!values[index].is_string() ||
+                        !lw::ppocr::http::DecodeBase64(values[index].get_ref<
+                            const std::string&>(), config.max_request_bytes,
+                            images[index], error)) {
+                        throw std::invalid_argument("image " +
+                            std::to_string(index) + ": " +
+                            (error.empty()
+                                ? "Base64 string is required" : error));
+                    }
+                }
+                auto lease = engines.Acquire();
+                native = CallRecognizeBatch(lease.get(), images);
+                native["image_count"] = images.size();
+            } else {
+                if (!body.contains("image_base64") ||
+                    !body.at("image_base64").is_string()) {
+                    throw std::invalid_argument(
+                        "image_base64 string is required");
+                }
+                std::vector<uint8_t> encoded;
+                std::string error;
+                if (!lw::ppocr::http::DecodeBase64(
+                        body.at("image_base64").get_ref<const std::string&>(),
+                        config.max_request_bytes, encoded, error)) {
+                    throw std::invalid_argument(error);
+                }
+                auto lease = engines.Acquire();
+                native = CallOcr(lease.get(), encoded, recognition_only);
+            }
         }
         native["ok"] = true;
         native["request_id"] = request_id;
@@ -627,7 +680,9 @@ int RunServer(const ServiceConfig& config,
         if (response.status == 413) {
             SetJson(response, {{"ok", false},
                 {"error", "request exceeds max_request_bytes"}}, 413);
+            return httplib::Server::HandlerResponse::Handled;
         }
+        return httplib::Server::HandlerResponse::Unhandled;
     });
     server.set_start_handler([&config, &on_started] {
         std::cout << kProduct << " HTTP service ready: http://"

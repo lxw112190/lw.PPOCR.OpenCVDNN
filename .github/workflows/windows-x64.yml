@@ -24,7 +24,8 @@ jobs:
       - name: Validate repository scripts
         shell: pwsh
         run: |
-          @("scripts/package_windows.ps1", "scripts/http_smoke.py") | ForEach-Object {
+          @("scripts/package_windows.ps1", "scripts/http_smoke.py", `
+            "scripts/http_stress.py") | ForEach-Object {
             if (-not (Test-Path -LiteralPath $_ -PathType Leaf)) {
               throw "Required repository script is missing: $_"
             }
@@ -110,7 +111,9 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
             scripts/package_windows.ps1 -PackageDir $package
           if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed" }
-          python scripts/http_smoke.py --package-dir $package
+          python scripts/http_smoke.py --package-dir $package --port 18787
+          python scripts/http_stress.py --package-dir $package `
+            --iterations 64 --concurrency 2 --port 18788
 
       - uses: actions/upload-artifact@v7
         with:

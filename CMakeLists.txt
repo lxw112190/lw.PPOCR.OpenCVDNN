@@ -10,7 +10,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if(UNIX AND NOT APPLE)
+if(APPLE)
+    set(CMAKE_BUILD_RPATH "@loader_path")
+    set(CMAKE_INSTALL_RPATH "@loader_path")
+elseif(UNIX)
     set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
     set(CMAKE_INSTALL_RPATH "$ORIGIN")
 endif()
@@ -134,7 +137,7 @@ if(WIN32)
         deploy/windows/stop-service.bat
         deploy/windows/restart-service.bat
         DESTINATION .)
-elseif(UNIX)
+elseif(UNIX AND NOT APPLE)
     install(PROGRAMS
         deploy/linux/service-common.sh
         deploy/linux/install-service.sh

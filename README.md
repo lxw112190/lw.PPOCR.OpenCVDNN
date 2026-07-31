@@ -14,10 +14,10 @@
 - 仅识别：客户已裁剪文字区域时，跳过检测并支持 1～256 张批量识别。
 - 稳定 C API：输入 JPEG/PNG/BMP 等编码图片字节，输出 UTF-8 JSON。
 - C、C# P/Invoke 和 Python ctypes 调用示例。
-- HTTP API：`/api/ocr`、`/api/recognize`、`/health`。
+- HTTP API：支持图片二进制直传和兼容的 JSON/Base64 请求，提供 `/api/ocr`、`/api/recognize`、`/health`。
 - 浏览器体验页：显示识别文本、置信度、阶段耗时，并在原图绘制文字区域。
 - 可选 API Key；运行日志和请求日志可分别开关。
-- Windows x64、Linux x64 CI；核心代码不包含平台专用推理逻辑。
+- Windows x64、Linux x64、macOS ARM64 CI；核心代码不包含平台专用推理逻辑。
 
 ## 快速使用 HTTP 服务
 
@@ -34,6 +34,13 @@ Linux：
 ```bash
 chmod +x lw-ppocr-http-service
 ./lw-ppocr-http-service
+```
+
+macOS Apple Silicon：
+
+```bash
+chmod +x run-http-service.sh
+./run-http-service.sh
 ```
 
 服务就绪后访问 <http://127.0.0.1:8787/>。启动时会固定输出作者、QQ、配置文件位置和全部有效参数；即使关闭 spdlog，也不会隐藏这段核对信息。QQ群只记录在本文档中，不在服务控制台和网页输出。
@@ -64,7 +71,15 @@ sudo ./uninstall-service.sh
 
 服务名为 `lw-ppocr-opencvdnn.service`，默认使用执行 `sudo` 的用户运行并随系统启动。可在安装时通过 `LW_PPOCR_SERVICE_USER` 指定账户，例如 `sudo LW_PPOCR_SERVICE_USER=ocr ./install-service.sh`。日志仍写入发布包的 `logs/` 目录。
 
-完整 OCR：
+完整 OCR 推荐直接上传图片二进制，避免 Base64 大约 33% 的体积膨胀：
+
+```bash
+curl http://127.0.0.1:8787/api/ocr \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @image.jpg
+```
+
+仍兼容 JSON/Base64：
 
 ```bash
 curl http://127.0.0.1:8787/api/ocr \
@@ -72,12 +87,12 @@ curl http://127.0.0.1:8787/api/ocr \
   -d '{"image_base64":"..."}'
 ```
 
-识别已裁剪的单行文字：
+识别已裁剪的单行文字也支持二进制：
 
 ```bash
 curl http://127.0.0.1:8787/api/recognize \
-  -H "Content-Type: application/json" \
-  -d '{"image_base64":"..."}'
+  -H "Content-Type: image/png" \
+  --data-binary @cropped-text.png
 ```
 
 批量识别已裁剪区域：
@@ -86,7 +101,7 @@ curl http://127.0.0.1:8787/api/recognize \
 {"images_base64":["...","..."]}
 ```
 
-`image_base64` 既可以是纯 Base64，也可以是浏览器产生的 `data:image/png;base64,...`。
+二进制单图请求接受 `image/*` 或 `application/octet-stream`。批量识别仍使用 JSON/Base64；`image_base64` 既可以是纯 Base64，也可以是浏览器产生的 `data:image/png;base64,...`。测试网页默认使用二进制接口。
 
 完整请求、响应和状态码说明见 [docs/HTTP-API.md](docs/HTTP-API.md)。
 
@@ -164,9 +179,9 @@ ctest --test-dir build -C Release --output-on-failure
 cmake --install build --config Release --prefix dist/package
 ```
 
-Windows 使用 DLL，Linux 使用 `.so`。CI 发布包按“解压即可运行”整理：包含 OCR Runtime、OpenCV、模型、配置、网页和示例；Windows 额外包含 VC143 x64 运行库，Linux 额外包含 `libstdc++.so.6` 与 `libgcc_s.so.1`，图像编解码依赖静态编入 OpenCV。glibc、Linux 动态加载器以及 Windows 系统 DLL 不随包分发，目标机仍需满足发布包标注的系统与架构基线。
+Windows 使用 DLL，Linux 使用 `.so`，macOS 使用 `.dylib`。CI 发布包按“解压即可运行”整理：包含 OCR Runtime、OpenCV、模型、配置、网页和示例；Windows 额外包含 VC143 x64 运行库，Linux 额外包含 `libstdc++.so.6` 与 `libgcc_s.so.1`，图像编解码依赖静态编入 OpenCV。glibc、Linux 动态加载器、Windows 系统 DLL 和 macOS 系统框架不随包分发，目标机仍需满足发布包标注的系统与架构基线。
 
-Linux CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。两个工作流最后都会上传压缩包和 SHA-256 校验文件。
+Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。三套工作流都会执行单元测试、真实 OCR、HTTP 冒烟测试，以及多尺寸图片并发、异常请求和 RSS 内存增长测试，最后上传压缩包与 SHA-256 校验文件。
 
 ## 并发建议
 

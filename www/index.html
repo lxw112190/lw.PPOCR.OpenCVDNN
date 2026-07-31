@@ -128,7 +128,8 @@
     if (!inside) sponsorDialog.close();
   });
   const sourceImage = new Image();
-  let imageBase64 = '';
+  let selectedImage = null;
+  let previewUrl = '';
   let lastRegions = [];
   let apiKeyRequired = false;
 
@@ -169,15 +170,13 @@
 
   file.addEventListener('change', () => {
     const selected = file.files[0]; if (!selected) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      imageBase64 = reader.result;
-      sourceImage.onload = () => { stage.style.display = 'block'; redraw([]); };
-      sourceImage.src = imageBase64; run.disabled = false;
-      status.textContent = `已选择 ${selected.name}`;
-      timings.replaceChildren(); rows.replaceChildren();
-    };
-    reader.readAsDataURL(selected);
+    selectedImage = selected;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(selected);
+    sourceImage.onload = () => { stage.style.display = 'block'; redraw([]); };
+    sourceImage.src = previewUrl; run.disabled = false;
+    status.textContent = `已选择 ${selected.name}；将通过二进制接口上传`;
+    timings.replaceChildren(); rows.replaceChildren();
   });
 
   function addCell(tr, value) { const td = document.createElement('td'); td.textContent = value; tr.appendChild(td); }
@@ -201,13 +200,14 @@
     run.disabled = true; rows.replaceChildren(); redraw([]); status.textContent = '正在识别……';
     const started = performance.now();
     try {
-      const headers = {'Content-Type': 'application/json'};
+      if (!selectedImage) throw new Error('请先选择图片');
+      const headers = {'Content-Type': selectedImage.type || 'application/octet-stream'};
       const key = document.querySelector('#key').value;
       if (apiKeyRequired && !key) throw new Error('服务已启用 API Key，请先填写');
       if (key) headers['X-API-Key'] = key;
       const recognitionOnly = mode.value === 'recognize';
       const response = await fetch(recognitionOnly ? '/api/recognize' : '/api/ocr', {
-        method: 'POST', headers, body: JSON.stringify({image_base64: imageBase64})
+        method: 'POST', headers, body: selectedImage
       });
       const data = await response.json();
       output.textContent = JSON.stringify(data, null, 2);

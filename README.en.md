@@ -14,10 +14,10 @@ The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the C
 - Recognition only: skips detection for pre-cropped text-line images; batches of 1–256 images are supported.
 - C API: accepts encoded JPEG/PNG/BMP image bytes and returns UTF-8 JSON.
 - C, C# P/Invoke, and Python ctypes examples.
-- HTTP endpoints: `/api/ocr`, `/api/recognize`, and `/health`.
+- HTTP endpoints support direct binary image uploads and compatible JSON/Base64 requests through `/api/ocr`, `/api/recognize`, and `/health`.
 - Browser page with detected regions, confidence scores, and stage timings.
 - Optional API Key; runtime and request logging can be controlled independently.
-- Windows x64 and Linux x64 CI, with platform-neutral inference code.
+- Windows x64, Linux x64, and macOS ARM64 CI, with platform-neutral inference code.
 
 ## HTTP quick start
 
@@ -32,6 +32,12 @@ Run the executable from the extracted package directory:
 # Linux
 chmod +x lw-ppocr-http-service
 ./lw-ppocr-http-service
+```
+
+```bash
+# macOS Apple Silicon
+chmod +x run-http-service.sh
+./run-http-service.sh
 ```
 
 Open <http://127.0.0.1:8787/>. Startup output always shows the author, QQ contact, configuration path, and all effective parameters, even when spdlog is disabled. The QQ group is documented here only and is not printed by the service or web page.
@@ -62,7 +68,16 @@ sudo ./uninstall-service.sh
 
 The service name is `lw-ppocr-opencvdnn.service`. By default it runs as the user who invoked `sudo` and starts at boot. Override the account during installation with `sudo LW_PPOCR_SERVICE_USER=ocr ./install-service.sh`. Logs remain under the package's `logs/` directory.
 
-Full OCR:
+For full OCR, upload the encoded image bytes directly to avoid Base64's roughly
+33% size increase:
+
+```bash
+curl http://127.0.0.1:8787/api/ocr \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @image.jpg
+```
+
+The JSON/Base64 form remains compatible:
 
 ```bash
 curl http://127.0.0.1:8787/api/ocr \
@@ -70,13 +85,23 @@ curl http://127.0.0.1:8787/api/ocr \
   -d '{"image_base64":"..."}'
 ```
 
-Cropped-text recognition uses `/api/recognize`. Send either `image_base64` or a batch:
+Cropped-text recognition also accepts binary data:
+
+```bash
+curl http://127.0.0.1:8787/api/recognize \
+  -H "Content-Type: image/png" \
+  --data-binary @cropped-text.png
+```
+
+Batch recognition remains JSON/Base64:
 
 ```json
 {"images_base64":["...","..."]}
 ```
 
-Both raw Base64 and `data:image/png;base64,...` URLs are accepted.
+Binary single-image requests accept `image/*` or `application/octet-stream`.
+Both raw Base64 and `data:image/png;base64,...` URLs are accepted in JSON. The
+browser page uses binary upload by default.
 
 See [docs/HTTP-API.md](docs/HTTP-API.md) for request, response, and status-code details.
 
@@ -128,9 +153,9 @@ ctest --test-dir build -C Release --output-on-failure
 cmake --install build --config Release --prefix dist/package
 ```
 
-CI artifacts are assembled for immediate use after extraction. They include the OCR runtime, OpenCV, models, configuration, web assets, and examples. Windows also bundles the VC143 x64 runtime. Linux bundles `libstdc++.so.6` and `libgcc_s.so.1`, while image-codec dependencies are linked into OpenCV statically. glibc, the Linux ELF loader, and Windows system DLLs remain platform dependencies, so the target still needs to match the documented OS and architecture baseline.
+CI artifacts are assembled for immediate use after extraction. They include the OCR runtime, OpenCV, models, configuration, web assets, and examples. Windows also bundles the VC143 x64 runtime. Linux bundles `libstdc++.so.6` and `libgcc_s.so.1`, while image-codec dependencies are linked into OpenCV statically. glibc, the Linux ELF loader, Windows system DLLs, and macOS system frameworks remain platform dependencies, so the target still needs to match the documented OS and architecture baseline.
 
-Linux CI saves OpenCV only after a successful build and install, while Windows CI caches the extracted official prebuilt package. Both workflows upload the package archive and its SHA-256 checksum.
+Linux and macOS CI save OpenCV only after a successful build and install, while Windows CI caches the extracted official prebuilt package. All three workflows run unit tests, real OCR, HTTP smoke tests, varied-image concurrent requests, malformed-request checks, and RSS-growth checks before uploading the package archive and its SHA-256 checksum.
 
 ## Concurrency
 

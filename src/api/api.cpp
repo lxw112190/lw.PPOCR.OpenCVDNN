@@ -29,6 +29,27 @@ namespace {
 
 thread_local std::string g_last_error;
 
+bool HasKnownImageSignature(const uint8_t* data, uint64_t size) {
+    if (data == nullptr) return false;
+    const bool jpeg = size >= 3 && data[0] == 0xFF && data[1] == 0xD8 &&
+        data[2] == 0xFF;
+    const bool png = size >= 8 && data[0] == 0x89 && data[1] == 0x50 &&
+        data[2] == 0x4E && data[3] == 0x47 && data[4] == 0x0D &&
+        data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A;
+    const bool bmp = size >= 2 && data[0] == 'B' && data[1] == 'M';
+    const bool webp = size >= 12 && std::memcmp(data, "RIFF", 4) == 0 &&
+        std::memcmp(data + 8, "WEBP", 4) == 0;
+    const bool tiff = size >= 4 &&
+        ((data[0] == 'I' && data[1] == 'I' && data[2] == 0x2A &&
+          data[3] == 0x00) ||
+         (data[0] == 'M' && data[1] == 'M' && data[2] == 0x00 &&
+          data[3] == 0x2A));
+    const bool gif = size >= 6 &&
+        (std::memcmp(data, "GIF87a", 6) == 0 ||
+         std::memcmp(data, "GIF89a", 6) == 0);
+    return jpeg || png || bmp || webp || tiff || gif;
+}
+
 double Milliseconds(Clock::time_point start, Clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - start).count();
 }
@@ -54,6 +75,9 @@ cv::Mat DecodeImage(
         encoded_size > static_cast<uint64_t>(
             (std::numeric_limits<int>::max)())) {
         throw std::invalid_argument("encoded image is empty or too large");
+    }
+    if (!HasKnownImageSignature(encoded, encoded_size)) {
+        throw std::invalid_argument("unsupported or corrupt encoded image");
     }
     cv::Mat input(1, static_cast<int>(encoded_size), CV_8UC1,
         const_cast<uint8_t*>(encoded));

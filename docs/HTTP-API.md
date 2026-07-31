@@ -14,6 +14,19 @@ required. It does not load or process an image.
 
 Runs text detection, optional direction classification, and recognition.
 
+Preferred binary request (no Base64 expansion):
+
+```bash
+curl http://127.0.0.1:8787/api/ocr \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @image.jpg
+```
+
+`image/png`, other `image/*` values, and `application/octet-stream` are also
+accepted. The request body must contain exactly one encoded image file.
+
+Compatible JSON/Base64 request:
+
 ```json
 {"image_base64":"data:image/jpeg;base64,..."}
 ```
@@ -46,7 +59,15 @@ The legacy flattened `x1`...`x4` and `y1`...`y4` fields are not emitted.
 
 Recognizes already-cropped text-line images without running detection.
 
-Single image:
+Preferred binary request for one cropped image:
+
+```bash
+curl http://127.0.0.1:8787/api/recognize \
+  -H "Content-Type: image/png" \
+  --data-binary @cropped-text.png
+```
+
+Compatible JSON/Base64 request for one image:
 
 ```json
 {"image_base64":"..."}
@@ -57,6 +78,10 @@ Ordered batch of 1–256 images:
 ```json
 {"images_base64":["...","..."]}
 ```
+
+Batch recognition remains JSON/Base64 because one HTTP body contains multiple
+independent images. For single-image requests, binary upload avoids Base64's
+roughly 33% size increase and reduces JSON encoding/decoding work.
 
 ## Status codes
 
