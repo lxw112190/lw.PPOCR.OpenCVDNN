@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lw.PPOCR.OpenCVDNN 在线体验</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #e9effc; background: #09101e; }
+    main { width: min(1160px, calc(100% - 28px)); margin: 28px auto 50px; }
+    h1 { margin: 0 0 6px; font-size: clamp(25px, 4vw, 34px); }
+    a { color: #79b8ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .muted { margin: 5px 0; color: #91a2c2; line-height: 1.6; }
+    .card { margin-top: 18px; padding: 20px; border: 1px solid #293854; border-radius: 15px; background: #121b2d; box-shadow: 0 14px 35px #02081766; }
+    .form { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(190px, .55fr); gap: 16px; }
+    .field { display: grid; gap: 7px; min-width: 0; color: #a6b5d0; font-size: 13px; }
+    .api-row { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 16px; align-items: start; margin-top: 16px; }
+    input, select, button { width: 100%; min-width: 0; min-height: 43px; border: 1px solid #354866; border-radius: 9px; font: inherit; }
+    input, select { padding: 8px 11px; color: #edf4ff; background: #0a1221; }
+    input[type=file] { padding: 7px; }
+    button { padding: 8px 18px; color: white; border-color: #4a91ff; background: #2878ff; font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: wait; }
+    .hint { color: #778bac; font-size: 12px; line-height: 1.5; }
+    #status { min-height: 24px; margin: 15px 0 0; color: #7ebcff; }
+    .stage { display: none; margin-top: 15px; padding: 10px; overflow: auto; border-radius: 10px; background: #070c15; }
+    canvas { display: block; max-width: 100%; height: auto; margin: auto; border-radius: 6px; }
+    .timings { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); gap: 9px; margin-top: 13px; }
+    .metric { padding: 10px 11px; border: 1px solid #273853; border-radius: 9px; background: #0a1221; }
+    .metric span { display: block; color: #8497b9; font-size: 12px; }
+    .metric strong { display: block; margin-top: 4px; color: #abd3ff; font-size: 16px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; margin-top: 12px; border-collapse: collapse; }
+    th, td { padding: 9px; border-bottom: 1px solid #293854; text-align: left; vertical-align: top; }
+    th { color: #91a2c2; font-size: 12px; }
+    pre { max-height: 340px; padding: 13px; overflow: auto; border-radius: 9px; color: #cedaf0; background: #090f1c; }
+    .footer { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
+    .sponsor-button, .dialog-close { width: auto; white-space: nowrap; }
+    dialog { width: min(560px, calc(100% - 28px)); max-height: 92vh; padding: 18px; color: #e9effc; border: 1px solid #3b5277; border-radius: 15px; background: #121b2d; box-shadow: 0 24px 70px #000b; }
+    dialog::backdrop { background: #020817d9; backdrop-filter: blur(3px); }
+    .dialog-head { display: flex; gap: 18px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .dialog-head strong { font-size: 18px; }
+    .sponsor { display: block; width: auto; max-width: 100%; max-height: 72vh; margin: auto; border-radius: 12px; background: white; }
+    .original-link { display: block; margin-top: 12px; text-align: center; }
+    @media (max-width: 760px) {
+      .form, .api-row { grid-template-columns: 1fr; }
+      .timings { grid-template-columns: repeat(3, 1fr); }
+      .footer { align-items: stretch; flex-direction: column; }
+      .sponsor-button { width: 100%; }
+    }
+    @media (max-width: 460px) { .timings { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>lw.PPOCR.OpenCVDNN 在线体验</h1>
+  <p class="muted">跨平台、仅依赖 OpenCV DNN 的精简 PP-OCR 推理服务。完整 OCR 会在原图上绘制文字区域；“仅识别”适合已裁剪的单行文字图片。</p>
+  <p class="muted">项目地址：<a href="https://github.com/lxw112190/lw.PPOCR.OpenCVDNN" target="_blank" rel="noopener">github.com/lxw112190/lw.PPOCR.OpenCVDNN</a></p>
+
+  <section class="card">
+    <div class="form">
+      <label class="field">选择图片
+        <input id="file" type="file" accept="image/*">
+      </label>
+      <label class="field">调用方式
+        <select id="mode"><option value="ocr">完整 OCR</option><option value="recognize">仅文字识别</option></select>
+      </label>
+    </div>
+    <div class="api-row">
+      <label class="field">API Key（服务未配置时留空）
+        <input id="key" type="password" autocomplete="off" placeholder="对应 http-service.json 中的 api_key">
+        <span class="hint">启用后，网页会把它放入 <code>X-API-Key</code> 请求头；不会写入 URL 或服务日志。</span>
+      </label>
+      <div class="field">
+        <span>操作</span>
+        <button id="run" disabled>开始识别</button>
+      </div>
+    </div>
+    <div id="stage" class="stage"><canvas id="canvas"></canvas></div>
+    <div id="status">正在检查服务状态……</div>
+    <div id="timings" class="timings"></div>
+  </section>
+
+  <section class="card">
+    <strong>识别结果</strong>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>文本</th><th>置信度</th><th>方向分类</th><th>坐标</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+  <section class="card"><strong>JSON 响应</strong><pre id="json">尚未请求</pre></section>
+
+  <section class="card footer">
+    <div>
+      <strong>联系与支持</strong>
+      <p class="muted">作者：天天代码码天天　QQ：819069052</p>
+      <p class="hint">如果这个项目对你有帮助，可以扫码支持后续维护。</p>
+    </div>
+    <button id="sponsor-open" class="sponsor-button" type="button">查看捐赠二维码</button>
+  </section>
+
+  <dialog id="sponsor-dialog" aria-labelledby="sponsor-title">
+    <div class="dialog-head">
+      <strong id="sponsor-title">微信捐赠二维码</strong>
+      <button id="sponsor-close" class="dialog-close" type="button">关闭</button>
+    </div>
+    <img class="sponsor" src="sponsor.jpg" alt="微信捐赠二维码">
+    <a class="original-link" href="sponsor.jpg" target="_blank" rel="noopener">在新窗口打开原图</a>
+  </dialog>
+</main>
+
+<script>
+  const file = document.querySelector('#file');
+  const mode = document.querySelector('#mode');
+  const run = document.querySelector('#run');
+  const status = document.querySelector('#status');
+  const stage = document.querySelector('#stage');
+  const canvas = document.querySelector('#canvas');
+  const ctx = canvas.getContext('2d');
+  const rows = document.querySelector('#rows');
+  const output = document.querySelector('#json');
+  const timings = document.querySelector('#timings');
+  const sponsorDialog = document.querySelector('#sponsor-dialog');
+  document.querySelector('#sponsor-open').addEventListener('click', () => sponsorDialog.showModal());
+  document.querySelector('#sponsor-close').addEventListener('click', () => sponsorDialog.close());
+  sponsorDialog.addEventListener('click', event => {
+    const rect = sponsorDialog.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right &&
+      event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (!inside) sponsorDialog.close();
+  });
+  const sourceImage = new Image();
+  let imageBase64 = '';
+  let lastRegions = [];
+  let apiKeyRequired = false;
+
+  fetch('/health').then(r => r.json()).then(data => {
+    apiKeyRequired = Boolean(data.api_key_required);
+    status.textContent = `服务就绪：${data.backend_name || data.backend}；API Key：${apiKeyRequired ? '已启用，请填写' : '未启用'}`;
+  }).catch(error => { status.textContent = `服务检查失败：${error}`; });
+
+  function redraw(regions = lastRegions) {
+    if (!sourceImage.naturalWidth) return;
+    const scale = Math.min(1, 1600 / sourceImage.naturalWidth);
+    canvas.width = Math.max(1, Math.round(sourceImage.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceImage.naturalHeight * scale));
+    ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+    lastRegions = regions;
+    const sx = canvas.width / sourceImage.naturalWidth;
+    const sy = canvas.height / sourceImage.naturalHeight;
+    ctx.lineWidth = Math.max(2, canvas.width / 650);
+    ctx.font = `${Math.max(13, Math.round(canvas.width / 65))}px "Microsoft YaHei UI", sans-serif`;
+    regions.forEach((region, index) => {
+      const points = [1, 2, 3, 4].map(i => [Number(region['x' + i]) * sx, Number(region['y' + i]) * sy]);
+      if (!points.every(p => p.every(Number.isFinite))) return;
+      ctx.beginPath(); ctx.moveTo(...points[0]); points.slice(1).forEach(p => ctx.lineTo(...p)); ctx.closePath();
+      ctx.strokeStyle = '#18e1a5'; ctx.stroke();
+      const label = `${index + 1} ${region.text || ''}`;
+      const x = Math.max(0, points[0][0]); const y = Math.max(20, points[0][1]);
+      ctx.fillStyle = '#061d18dd'; ctx.fillRect(x, y - 20, ctx.measureText(label).width + 10, 22);
+      ctx.fillStyle = '#8dffe0'; ctx.fillText(label, x + 5, y - 4);
+    });
+  }
+
+  file.addEventListener('change', () => {
+    const selected = file.files[0]; if (!selected) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      imageBase64 = reader.result;
+      sourceImage.onload = () => { stage.style.display = 'block'; redraw([]); };
+      sourceImage.src = imageBase64; run.disabled = false;
+      status.textContent = `已选择 ${selected.name}`;
+      timings.replaceChildren(); rows.replaceChildren();
+    };
+    reader.readAsDataURL(selected);
+  });
+
+  function addCell(tr, value) { const td = document.createElement('td'); td.textContent = value; tr.appendChild(td); }
+  function renderTiming(value, clientMs) {
+    timings.replaceChildren();
+    const entries = [
+      ['图片解码', value.decode_ms], ['文本检测', value.detector?.total_ms],
+      ['方向分类', value.classifier?.total_ms], ['文字识别', value.recognizer?.total_ms],
+      ['推理管线', value.pipeline?.total_ms], ['HTTP 总耗时', value.server_total_ms ?? clientMs]
+    ];
+    entries.forEach(([name, number]) => {
+      const div = document.createElement('div'); div.className = 'metric';
+      const label = document.createElement('span'); label.textContent = name;
+      const strong = document.createElement('strong');
+      strong.textContent = Number.isFinite(Number(number)) ? `${Number(number).toFixed(2)} ms` : '—';
+      div.append(label, strong); timings.appendChild(div);
+    });
+  }
+
+  run.addEventListener('click', async () => {
+    run.disabled = true; rows.replaceChildren(); redraw([]); status.textContent = '正在识别……';
+    const started = performance.now();
+    try {
+      const headers = {'Content-Type': 'application/json'};
+      const key = document.querySelector('#key').value;
+      if (apiKeyRequired && !key) throw new Error('服务已启用 API Key，请先填写');
+      if (key) headers['X-API-Key'] = key;
+      const recognitionOnly = mode.value === 'recognize';
+      const response = await fetch(recognitionOnly ? '/api/recognize' : '/api/ocr', {
+        method: 'POST', headers, body: JSON.stringify({image_base64: imageBase64})
+      });
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      const items = Array.isArray(data.result) ? data.result : [];
+      items.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        const hasBox = !recognitionOnly && Number.isFinite(Number(item.x1));
+        const points = hasBox ? [1, 2, 3, 4].map(i => `(${Number(item['x' + i]).toFixed(0)}, ${Number(item['y' + i]).toFixed(0)})`).join(' ') : '—';
+        addCell(tr, index + 1); addCell(tr, item.text || '');
+        addCell(tr, Number(item.score || 0).toFixed(4));
+        addCell(tr, `${item.cls_label ?? -1} / ${Number(item.cls_score || 0).toFixed(4)}`);
+        addCell(tr, points); rows.appendChild(tr);
+      });
+      if (!recognitionOnly) redraw(items);
+      renderTiming(data.timing || {}, performance.now() - started);
+      status.textContent = `识别完成：${items.length} 项；请求 ID：${data.request_id}`;
+    } catch (error) {
+      status.textContent = `识别失败：${error.message || error}`;
+    } finally { run.disabled = false; }
+  });
+</script>
+</body>
+</html>

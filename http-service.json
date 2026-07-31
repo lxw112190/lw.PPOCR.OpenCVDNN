@@ -1,0 +1,31 @@
+{
+  "listen_host": "127.0.0.1",
+  "port": 8787,
+  "model_manifest": "models/ppocrv6-tiny/model.json",
+  "web_root": "www",
+  "api_key": "",
+  "enable_classifier": true,
+  "limit_side_len": 960,
+  "det_db_threshold": 0.3,
+  "det_db_box_threshold": 0.6,
+  "det_db_unclip_ratio": 1.6,
+  "det_use_dilation": false,
+  "cls_threshold": 0.9,
+  "cls_batch_size": 8,
+  "rec_batch_size": 8,
+  "rec_concurrency": 1,
+  "engine_instances": 1,
+  "worker_threads": 4,
+  "max_request_bytes": 20971520,
+  "max_image_pixels": 40000000,
+  "logging": {
+    "enabled": true,
+    "level": "info",
+    "console": true,
+    "file_enabled": true,
+    "file_path": "logs/lw-ppocr.log",
+    "request_enabled": true,
+    "max_file_size_mb": 10,
+    "max_files": 5
+  }
+}

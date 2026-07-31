@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lxw112190/lw.PPOCR.OpenCVDNN/main/models/model-manifest.schema.json",
+  "title": "lw.PPOCR.OpenCVDNN model manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "family", "dictionary", "stages"],
+  "properties": {
+    "$schema": {"type": "string", "minLength": 1},
+    "schema_version": {"const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "family": {"type": "string", "minLength": 1},
+    "language": {"type": "string", "default": "ch"},
+    "dictionary": {"$ref": "#/$defs/file"},
+    "stages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detector", "recognizer"],
+      "properties": {
+        "detector": {"$ref": "#/$defs/stage"},
+        "classifier": {"$ref": "#/$defs/stage"},
+        "recognizer": {"$ref": "#/$defs/stage"}
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"}
+      }
+    },
+    "shape": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 4,
+      "items": {"type": "integer"}
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "format", "precision"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "format": {"const": "onnx"},
+        "precision": {"enum": ["fp32", "fp16", "int8"]},
+        "sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"}
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_shape", "artifacts"],
+      "properties": {
+        "input_name": {"type": "string"},
+        "output_name": {"type": "string"},
+        "input_shape": {"$ref": "#/$defs/shape"},
+        "artifacts": {
+          "type": "object",
+          "required": ["onnx"],
+          "additionalProperties": false,
+          "properties": {"onnx": {"$ref": "#/$defs/artifact"}}
+        }
+      }
+    }
+  }
+}

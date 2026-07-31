@@ -1,0 +1,11 @@
+* text=auto
+*.h text eol=lf
+*.hpp text eol=lf
+*.c text eol=lf
+*.cpp text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.jpg binary
+*.onnx binary

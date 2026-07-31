@@ -1,0 +1,14 @@
+/build/
+/dist/
+/logs/
+/.cache/
+.vs/
+.vscode/
+*.user
+*.suo
+*.pdb
+*.ilk
+__pycache__/
+*.py[cod]
+**/bin/
+**/obj/

@@ -1,0 +1,113 @@
+name: Linux x64
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OPENCV_VERSION: 5.0.0
+  PACKAGE_VERSION: 0.1.0
+
+jobs:
+  ubuntu-20-04:
+    runs-on: ubuntu-22.04
+    container: ubuntu:20.04
+    steps:
+      - name: Install toolchain
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git libjpeg-dev libpng-dev \
+            libtiff-dev pkg-config python3 python3-pip tar zlib1g-dev
+          python3 -m pip install --no-cache-dir cmake==3.31.6 ninja==1.11.1.4
+
+      - uses: actions/checkout@v6
+
+      - name: Restore minimal OpenCV cache
+        id: opencv-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .ci/opencv-5.0.0
+          key: opencv-5.0.0-ubuntu-20.04-x64-minimal-v3
+
+      - name: Build minimal OpenCV
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .ci /tmp/opencv-source /tmp/opencv-build
+          curl --fail --location --retry 5 --retry-delay 5 \
+            --retry-connrefused \
+            "https://github.com/opencv/opencv/archive/refs/tags/${OPENCV_VERSION}.tar.gz" \
+            --output /tmp/opencv.tar.gz
+          tar -xzf /tmp/opencv.tar.gz --strip-components=1 -C /tmp/opencv-source
+          cmake -S /tmp/opencv-source -B /tmp/opencv-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/.ci/opencv-5.0.0" \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DBUILD_LIST=core,imgproc,imgcodecs,dnn \
+            -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF -DBUILD_JAVA=OFF \
+            -DBUILD_opencv_apps=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_TESTS=OFF \
+            -DBUILD_JPEG=ON -DBUILD_PNG=ON -DBUILD_PROTOBUF=ON \
+            -DBUILD_TIFF=ON -DBUILD_ZLIB=ON \
+            -DWITH_EIGEN=OFF -DWITH_FFMPEG=OFF \
+            -DWITH_GDAL=OFF -DWITH_GSTREAMER=OFF -DWITH_GTK=OFF \
+            -DWITH_IPP=OFF -DWITH_ITT=OFF -DWITH_JASPER=OFF \
+            -DWITH_LAPACK=OFF -DWITH_OPENCL=OFF -DWITH_OPENEXR=OFF \
+            -DWITH_QT=OFF -DWITH_TBB=OFF -DWITH_WEBP=OFF
+          cmake --build /tmp/opencv-build --parallel 2
+          cmake --install /tmp/opencv-build
+
+      - name: Save minimal OpenCV cache
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .ci/opencv-5.0.0
+          key: ${{ steps.opencv-cache.outputs.cache-primary-key }}
+
+      - name: Configure and build
+        run: |
+          bash -n deploy/linux/*.sh scripts/package_linux.sh
+          config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0" -name OpenCVConfig.cmake -print -quit)"
+          test -n "$config"
+          echo "OpenCV_DIR=$(dirname "$config")" >> "$GITHUB_ENV"
+          cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DOpenCV_DIR="$(dirname "$config")"
+          cmake --build build/ci --parallel 2
+
+      - name: Unit and real OCR tests
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/.ci/opencv-5.0.0/lib
+        run: |
+          ctest --test-dir build/ci --output-on-failure
+          build/ci/lw-ppocr-c-example \
+            models/ppocrv6-tiny/model.json models/ppocrv6-tiny/sample.jpg
+
+      - name: Package and HTTP smoke test
+        run: |
+          bash scripts/package_linux.sh build/ci .ci/opencv-5.0.0 dist "$PACKAGE_VERSION"
+          for script in install-service.sh uninstall-service.sh start-service.sh \
+                        stop-service.sh restart-service.sh; do
+            test -x "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64/$script"
+          done
+          python3 scripts/http_smoke.py \
+            --package-dir "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64"
+          LD_LIBRARY_PATH="dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64" \
+            ldd "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64/lw-ppocr-http-service"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-linux-x64
+          path: |
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-linux-x64.tar.gz
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-linux-x64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14

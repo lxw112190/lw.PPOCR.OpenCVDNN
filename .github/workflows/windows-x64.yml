@@ -1,0 +1,119 @@
+name: Windows x64
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PACKAGE_VERSION: 0.1.0
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate repository scripts
+        shell: pwsh
+        run: |
+          @("scripts/package_windows.ps1", "scripts/http_smoke.py") | ForEach-Object {
+            if (-not (Test-Path -LiteralPath $_ -PathType Leaf)) {
+              throw "Required repository script is missing: $_"
+            }
+          }
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build C# P/Invoke example
+        run: dotnet build examples/csharp -c Release
+
+      - name: Restore OpenCV cache
+        id: opencv-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/opencv
+          key: opencv-5.0.0-windows-x64-prebuilt-v1
+
+      - name: Download and extract OpenCV
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $url = "https://downloads.sourceforge.net/project/opencvlibrary/5.0.0/opencv-5.0.0-windows.exe"
+          $archive = Join-Path $env:RUNNER_TEMP "opencv.exe"
+          curl.exe -L --fail --show-error --retry 5 --retry-delay 10 `
+            --output $archive $url
+          if ($LASTEXITCODE -ne 0) { throw "OpenCV download failed" }
+          New-Item -ItemType Directory -Path "${{ runner.temp }}/opencv" -Force | Out-Null
+          7z x $archive "-o${{ runner.temp }}/opencv" -y
+          if ($LASTEXITCODE -ne 0) { throw "OpenCV extraction failed" }
+
+      - name: Save OpenCV cache
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/opencv
+          key: ${{ steps.opencv-cache.outputs.cache-primary-key }}
+
+      - name: Locate OpenCV
+        shell: pwsh
+        run: |
+          $config = Get-ChildItem "${{ runner.temp }}/opencv" `
+            -Filter OpenCVConfig.cmake -File -Recurse | Select-Object -First 1
+          if (-not $config) { throw "OpenCVConfig.cmake not found" }
+          $bin = Get-ChildItem "${{ runner.temp }}/opencv" `
+            -Filter opencv_world500.dll -File -Recurse | Select-Object -First 1
+          if (-not $bin) { throw "opencv_world500.dll not found" }
+          "OpenCV_DIR=$($config.Directory.FullName)" | Out-File $env:GITHUB_ENV -Append
+          "OpenCV_BIN=$($bin.Directory.FullName)" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Build, test, and install
+        shell: pwsh
+        run: |
+          cmake -S . -B build/ci -A x64 -DOpenCV_DIR="$env:OpenCV_DIR"
+          cmake --build build/ci --config Release --parallel 2
+          $env:PATH = "$env:OpenCV_BIN;${{ github.workspace }}/build/ci/Release;$env:PATH"
+          ctest --test-dir build/ci -C Release --output-on-failure
+          build/ci/Release/lw-ppocr-c-example.exe `
+            models/ppocrv6-tiny/model.json models/ppocrv6-tiny/sample.jpg
+          $help = build/ci/Release/lw-ppocr-http-service.exe --help
+          if ($help -notmatch "--service") { throw "Windows service mode is missing" }
+          cmake --install build/ci --config Release `
+            --prefix "dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-windows-x64"
+
+      - name: HTTP smoke and package
+        shell: pwsh
+        run: |
+          $package = "dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-windows-x64"
+          @("install-service.bat", "uninstall-service.bat", "start-service.bat", `
+            "stop-service.bat", "restart-service.bat") | ForEach-Object {
+              if (-not (Test-Path (Join-Path $package $_))) {
+                throw "Missing Windows service script: $_"
+              }
+            }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+            scripts/package_windows.ps1 -PackageDir $package
+          if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed" }
+          python scripts/http_smoke.py --package-dir $package
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-windows-x64
+          path: |
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-windows-x64.zip
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-windows-x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
