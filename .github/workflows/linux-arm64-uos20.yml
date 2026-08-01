@@ -53,7 +53,7 @@ jobs:
           tar -xzf /tmp/cmake.tar.gz --strip-components=1 -C /opt/cmake
           echo /opt/cmake/bin >> "$GITHUB_PATH"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Confirm UOS 20-compatible build baseline
         run: |
