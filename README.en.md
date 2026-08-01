@@ -25,6 +25,34 @@ The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the C
 - Supply-chain controls with dependency/model hashes, a CycloneDX 1.6 SBOM, CodeQL, pull-request dependency review, and scheduled verification. Automated Dependabot update PRs are disabled; dependency upgrades are reviewed manually.
 - Windows x64, Linux x64, Linux ARM64 (UnionTech UOS 20 compatibility baseline), and macOS ARM64 CI, with platform-neutral inference code.
 
+## Performance snapshot
+
+The following results were measured locally on 2026-08-01 with an AMD Ryzen 7
+7735H (8 cores / 16 threads), 16 GB RAM, Windows 10 22H2, and OpenCV DNN 5.0.0
+on CPU. The HTTP client used loopback, keep-alive, and binary image bodies. Each
+scenario was warmed up concurrently before measurement, with file logging
+disabled during the benchmark.
+
+| Workload | Engines / concurrency | Throughput | Client P95 | Warm RSS |
+| --- | ---: | ---: | ---: | ---: |
+| Full OCR | 1 / 1 | 6.17 req/s | 177.97 ms | about 151 MB |
+| Full OCR | 2 / 2 | 6.98 req/s | 336.50 ms | about 284 MB |
+| Recognition only (cropped line) | 1 / 1 | 126.14 req/s | 9.39 ms | about 154 MB |
+| Recognition only (cropped line) | 2 / 2 | 172.69 req/s | 13.68 ms | about 287 MB |
+| Recognition only (cropped line) | 4 / 4 | 199.80 req/s | 24.32 ms | about 551 MB |
+
+All 1,000 varied-size requests in the concurrency-4 stability run succeeded.
+RSS grew by `2.32 MB` net, and normal OCR recovered after malformed-input tests.
+Four engines reduced full-OCR throughput on this machine because of CPU
+contention, so start with `engine_instances=1` for full OCR. Two engines are a
+reasonable first benchmark for cropped-line recognition. These measurements
+are sizing guidance, not a performance guarantee for other images, CPUs, or
+operating systems.
+
+See the [v1.0.0-rc.3 Windows local performance report](docs/performance/v1.0.0-rc.3-windows-local.md)
+for the complete environment, methodology, latency percentiles, memory data,
+and reproduction commands.
+
 ## HTTP quick start
 
 Run the executable from the extracted package directory:
