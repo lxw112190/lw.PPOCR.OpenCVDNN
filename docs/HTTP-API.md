@@ -82,7 +82,8 @@ Compatible JSON/Base64 request for one image:
 {"image_base64":"..."}
 ```
 
-Ordered batch of 1–256 images:
+Ordered batch. The default limit is 32 images and the configurable upper bound
+is 256:
 
 ```json
 {"images_base64":["...","..."]}
@@ -92,6 +93,11 @@ Batch recognition remains JSON/Base64 because one HTTP body contains multiple
 independent images. For single-image requests, binary upload avoids Base64's
 roughly 33% size increase and reduces JSON encoding/decoding work.
 
+Batch images are decoded and inferred in chunks of eight while preserving
+source order. `max_batch_images`, `max_batch_total_pixels`, and
+`max_batch_decoded_bytes` limit count, cumulative pixels, and cumulative
+decoded memory respectively.
+
 ## Status codes
 
 | Status | Meaning |
@@ -99,7 +105,9 @@ roughly 33% size increase and reduces JSON encoding/decoding work.
 | `200` | Request completed successfully |
 | `400` | Invalid JSON, Base64, image, or parameter |
 | `401` | Missing or invalid API Key |
-| `413` | Request body exceeds `max_request_bytes` |
+| `413` | Request body, batch count, cumulative pixels, or decoded bytes exceeds a configured limit |
+| `429` | The OCR engine wait queue is full |
+| `503` | Waiting for an OCR engine timed out or the service is stopping |
 | `500` | Model inference or unexpected server error |
 
 Every application-level error is JSON and includes a stable `error_code`:
@@ -109,7 +117,9 @@ Every application-level error is JSON and includes a stable `error_code`:
 ```
 
 API v1 defines these error codes: `unauthorized`, `invalid_json`,
-`invalid_request`, `payload_too_large`, and `internal_error`. Clients should use
+`invalid_request`, `payload_too_large`, `batch_limit_exceeded`, `queue_full`,
+`engine_wait_timeout`, `service_stopping`, `service_unavailable`, and
+`internal_error`. `429` and `503` responses include `Retry-After: 1`. Clients should use
 `error_code`, not the human-readable `error` text, for control flow.
 
 The complete HTTP/configuration/log compatibility policy is documented in

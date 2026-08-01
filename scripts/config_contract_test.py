@@ -57,6 +57,18 @@ def main() -> int:
         lambda value: value["logging"].update(
             trusted_proxies=["127.0.0.1", "127.0.0.1"]),
         "entries must be unique")
+    add("zero-queue-limit",
+        lambda value: value.update(max_queued_requests=0),
+        "configuration contains an out-of-range value")
+    add("zero-engine-timeout",
+        lambda value: value.update(engine_wait_timeout_ms=0),
+        "configuration contains an out-of-range value")
+    add("batch-count-over-limit",
+        lambda value: value.update(max_batch_images=257),
+        "configuration contains an out-of-range value")
+    add("batch-pixels-below-single-image-limit",
+        lambda value: value.update(max_batch_total_pixels=1),
+        "configuration contains an out-of-range value")
 
     environment = os.environ.copy()
     environment.update({

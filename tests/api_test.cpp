@@ -25,7 +25,15 @@ static_assert(offsetof(lw_ppocr_config, max_image_pixels) == 56,
     "64-bit ABI changed");
 static_assert(offsetof(lw_ppocr_config, log_callback) == 72,
     "64-bit ABI changed");
-static_assert(offsetof(lw_ppocr_config, reserved_i32) == 88,
+static_assert(offsetof(lw_ppocr_config, max_batch_images) == 88,
+    "64-bit ABI changed");
+static_assert(offsetof(lw_ppocr_config, reserved_batch_u32) == 92,
+    "64-bit ABI changed");
+static_assert(offsetof(lw_ppocr_config, max_batch_total_pixels) == 96,
+    "64-bit ABI changed");
+static_assert(offsetof(lw_ppocr_config, max_batch_decoded_bytes) == 104,
+    "64-bit ABI changed");
+static_assert(offsetof(lw_ppocr_config, reserved_i32) == 112,
     "64-bit ABI changed");
 static_assert(offsetof(lw_ppocr_config, reserved_ptr) == 120,
     "64-bit ABI changed");
@@ -45,13 +53,18 @@ int main() {
         LW_PPOCR_STATUS_OK != 0 ||
         LW_PPOCR_STATUS_INVALID_ARGUMENT != -1 ||
         LW_PPOCR_STATUS_INTERNAL_ERROR != -6 ||
+        LW_PPOCR_STATUS_LIMIT_EXCEEDED != -7 ||
         LW_PPOCR_LOG_OFF != 0 || LW_PPOCR_LOG_DEBUG != 4) {
         return 1;
     }
     lw_ppocr_config config{};
     lw_ppocr_config_init(&config);
     if (config.struct_size != sizeof(config) ||
-        config.api_version != LW_PPOCR_API_VERSION) {
+        config.api_version != LW_PPOCR_API_VERSION ||
+        config.max_batch_images != 32 ||
+        config.reserved_batch_u32 != 0 ||
+        config.max_batch_total_pixels != 40000000 ||
+        config.max_batch_decoded_bytes != 120000000) {
         return 2;
     }
     for (int32_t value : config.reserved_i32) {

@@ -278,9 +278,10 @@ def main() -> int:
             post_json(f"{base_url}/api/ocr", {"image_base64": "%%%"})))
         invalid_cases.append(expect_error("empty-batch", 400,
             post_json(f"{base_url}/api/recognize", {"images_base64": []})))
-        invalid_cases.append(expect_error("oversized-batch", 400,
+        invalid_cases.append(expect_error("oversized-batch", 413,
             post_json(f"{base_url}/api/recognize",
-                {"images_base64": [""] * 257})))
+                {"images_base64": [""] *
+                    (config["max_batch_images"] + 1)})))
         invalid_cases.append(expect_error("oversized-request", 413,
             post_binary(f"{base_url}/api/ocr",
                 b"x" * (config["max_request_bytes"] + 1))))

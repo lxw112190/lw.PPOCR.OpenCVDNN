@@ -464,18 +464,16 @@ core::PipelineResult OcrEngine::Run(const cv::Mat& image) {
 }
 
 core::RecognitionResult OcrEngine::RecognizeBatch(
-    const std::vector<cv::Mat>& images) {
+    std::vector<cv::Mat> images) {
     std::lock_guard<std::mutex> lock(impl_->run_mutex);
     const Clock::time_point pipeline_start = Clock::now();
-    std::vector<cv::Mat> crops;
-    crops.reserve(images.size());
     for (const cv::Mat& image : images) {
         if (image.empty() || image.type() != CV_8UC3) {
             throw std::invalid_argument(
                 "recognition input must be a non-empty BGR image");
         }
-        crops.push_back(image.clone());
     }
+    std::vector<cv::Mat> crops = std::move(images);
 
     core::RecognitionResult result;
     result.items.resize(crops.size());

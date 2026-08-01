@@ -1,4 +1,5 @@
 #include "base64.hpp"
+#include "engine_pool.hpp"
 #include "logging.hpp"
 
 #include <httplib.h>
@@ -10,7 +11,6 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
-#include <condition_variable>
 #include <csignal>
 #include <cstdlib>
 #include <ctime>
@@ -22,8 +22,6 @@
 #include <initializer_list>
 #include <iostream>
 #include <limits>
-#include <memory>
-#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -42,6 +40,8 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
+using EnginePool = lw::ppocr::http::EnginePool;
+using EngineSettings = lw::ppocr::http::EngineSettings;
 
 namespace {
 
@@ -72,12 +72,18 @@ struct ServiceConfig {
     int rec_concurrency = 1;
     size_t engine_instances = 1;
     size_t worker_threads = 4;
+    size_t max_queued_requests = 32;
+    uint64_t engine_wait_timeout_ms = 5000;
     size_t max_request_bytes = 20u * 1024u * 1024u;
     uint64_t max_image_pixels = 40000000;
+    size_t max_batch_images = 32;
+    uint64_t max_batch_total_pixels = 40000000;
+    uint64_t max_batch_decoded_bytes = 120000000;
     lw::ppocr::http::LoggingConfig logging;
 };
 
 std::atomic<httplib::Server*> g_server{nullptr};
+std::atomic<EnginePool*> g_engine_pool{nullptr};
 std::atomic<uint64_t> g_request_sequence{0};
 fs::path g_config_path;
 
@@ -252,10 +258,21 @@ void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
         "LW_PPOCR_ENGINE_INSTANCES", config.engine_instances));
     config.worker_threads = static_cast<size_t>(EnvironmentUnsigned(
         "LW_PPOCR_WORKER_THREADS", config.worker_threads));
+    config.max_queued_requests = static_cast<size_t>(EnvironmentUnsigned(
+        "LW_PPOCR_MAX_QUEUED_REQUESTS", config.max_queued_requests));
+    config.engine_wait_timeout_ms = EnvironmentUnsigned(
+        "LW_PPOCR_ENGINE_WAIT_TIMEOUT_MS", config.engine_wait_timeout_ms);
     config.max_request_bytes = static_cast<size_t>(EnvironmentUnsigned(
         "LW_PPOCR_MAX_REQUEST_BYTES", config.max_request_bytes));
     config.max_image_pixels = EnvironmentUnsigned(
         "LW_PPOCR_MAX_IMAGE_PIXELS", config.max_image_pixels);
+    config.max_batch_images = static_cast<size_t>(EnvironmentUnsigned(
+        "LW_PPOCR_MAX_BATCH_IMAGES", config.max_batch_images));
+    config.max_batch_total_pixels = EnvironmentUnsigned(
+        "LW_PPOCR_MAX_BATCH_TOTAL_PIXELS", config.max_batch_total_pixels);
+    config.max_batch_decoded_bytes = EnvironmentUnsigned(
+        "LW_PPOCR_MAX_BATCH_DECODED_BYTES",
+        config.max_batch_decoded_bytes);
     config.logging.enabled = EnvironmentBoolean(
         "LW_PPOCR_LOGGING_ENABLED", config.logging.enabled);
     config.logging.console = EnvironmentBoolean(
@@ -310,8 +327,10 @@ ServiceConfig LoadConfig(const fs::path& path) {
         "limit_side_len", "det_db_threshold", "det_db_box_threshold",
         "det_db_unclip_ratio", "det_use_dilation", "cls_threshold",
         "cls_batch_size", "rec_batch_size", "rec_concurrency",
-        "engine_instances", "worker_threads", "max_request_bytes",
-        "max_image_pixels", "logging"
+        "engine_instances", "worker_threads", "max_queued_requests",
+        "engine_wait_timeout_ms", "max_request_bytes", "max_image_pixels",
+        "max_batch_images", "max_batch_total_pixels",
+        "max_batch_decoded_bytes", "logging"
     }, "HTTP service configuration");
     if (!document.contains("schema_version")) {
         throw std::runtime_error(
@@ -368,10 +387,20 @@ ServiceConfig LoadConfig(const fs::path& path) {
         "engine_instances", config.engine_instances);
     config.worker_threads = document.value(
         "worker_threads", config.worker_threads);
+    config.max_queued_requests = document.value(
+        "max_queued_requests", config.max_queued_requests);
+    config.engine_wait_timeout_ms = document.value(
+        "engine_wait_timeout_ms", config.engine_wait_timeout_ms);
     config.max_request_bytes = document.value(
         "max_request_bytes", config.max_request_bytes);
     config.max_image_pixels = document.value(
         "max_image_pixels", config.max_image_pixels);
+    config.max_batch_images = document.value(
+        "max_batch_images", config.max_batch_images);
+    config.max_batch_total_pixels = document.value(
+        "max_batch_total_pixels", config.max_batch_total_pixels);
+    config.max_batch_decoded_bytes = document.value(
+        "max_batch_decoded_bytes", config.max_batch_decoded_bytes);
 
     if (document.contains("logging")) {
         const json& logging = document.at("logging");
@@ -460,6 +489,17 @@ ServiceConfig LoadConfig(const fs::path& path) {
 
     ApplyEnvironmentOverrides(config, base);
 
+    if (!document.contains("max_batch_total_pixels") &&
+        std::getenv("LW_PPOCR_MAX_BATCH_TOTAL_PIXELS") == nullptr) {
+        config.max_batch_total_pixels = (std::max)(
+            config.max_batch_total_pixels, config.max_image_pixels);
+    }
+    if (!document.contains("max_batch_decoded_bytes") &&
+        std::getenv("LW_PPOCR_MAX_BATCH_DECODED_BYTES") == nullptr) {
+        config.max_batch_decoded_bytes = (std::max)(
+            config.max_batch_decoded_bytes, config.max_image_pixels * 3ull);
+    }
+
     if (config.logging.trusted_proxies.size() > 64) {
         throw std::runtime_error(
             "logging.trusted_proxies must contain at most 64 items");
@@ -479,6 +519,10 @@ ServiceConfig LoadConfig(const fs::path& path) {
     if (config.port < 1 || config.port > 65535 ||
         config.worker_threads < 1 || config.worker_threads > 128 ||
         config.engine_instances < 1 || config.engine_instances > 32 ||
+        config.max_queued_requests < 1 ||
+        config.max_queued_requests > 128 ||
+        config.engine_wait_timeout_ms < 1 ||
+        config.engine_wait_timeout_ms > 300000 ||
         config.limit_side_len < 32 || config.limit_side_len > 10000 ||
         config.det_db_threshold < 0.0f || config.det_db_threshold > 1.0f ||
         config.det_db_box_threshold < 0.0f ||
@@ -492,6 +536,11 @@ ServiceConfig LoadConfig(const fs::path& path) {
         config.max_request_bytes < 1024 ||
         config.max_request_bytes > 256u * 1024u * 1024u ||
         config.max_image_pixels < 1 || config.max_image_pixels > 200000000u ||
+        config.max_batch_images < 1 || config.max_batch_images > 256 ||
+        config.max_batch_total_pixels < config.max_image_pixels ||
+        config.max_batch_total_pixels > 1000000000ull ||
+        config.max_batch_decoded_bytes < config.max_image_pixels * 3ull ||
+        config.max_batch_decoded_bytes > 4ull * 1024ull * 1024ull * 1024ull ||
         config.logging.max_file_size < 1024u ||
         config.logging.max_files < 1 || config.logging.max_files > 100 ||
         config.logging.flush_interval_seconds < 1 ||
@@ -534,92 +583,6 @@ std::string LastError(lw_ppocr_handle handle) {
     return std::string(buffer.data());
 }
 
-class EnginePool {
-public:
-    class Lease {
-    public:
-        Lease(EnginePool& owner, size_t index)
-            : owner_(&owner), index_(index) {}
-        ~Lease() { if (owner_ != nullptr) owner_->Release(index_); }
-        Lease(const Lease&) = delete;
-        Lease& operator=(const Lease&) = delete;
-        lw_ppocr_handle get() const { return owner_->handles_[index_]; }
-    private:
-        EnginePool* owner_;
-        size_t index_;
-    };
-
-    explicit EnginePool(const ServiceConfig& settings) {
-        model_manifest_ = settings.model_manifest.u8string();
-        lw_ppocr_config config{};
-        lw_ppocr_config_init(&config);
-        config.model_manifest_utf8 = model_manifest_.c_str();
-        config.enable_classifier = settings.enable_classifier ? 1 : 0;
-        config.limit_side_len = settings.limit_side_len;
-        config.det_db_threshold = settings.det_db_threshold;
-        config.det_db_box_threshold = settings.det_db_box_threshold;
-        config.det_db_unclip_ratio = settings.det_db_unclip_ratio;
-        config.det_use_dilation = settings.det_use_dilation ? 1 : 0;
-        config.cls_threshold = settings.cls_threshold;
-        config.cls_batch_size = settings.cls_batch_size;
-        config.rec_batch_size = settings.rec_batch_size;
-        config.rec_concurrency = settings.rec_concurrency;
-        config.max_image_pixels = settings.max_image_pixels;
-        config.log_level = LW_PPOCR_LOG_INFO;
-        config.log_callback = &lw::ppocr::http::CoreLogBridge;
-
-        try {
-            for (size_t index = 0; index < settings.engine_instances; ++index) {
-                lw_ppocr_handle handle = nullptr;
-                const lw_ppocr_status status = lw_ppocr_create(&config, &handle);
-                if (status != LW_PPOCR_STATUS_OK) {
-                    throw std::runtime_error(
-                        "OCR initialization failed: " + LastError(handle));
-                }
-                handles_.push_back(handle);
-                available_.push_back(index);
-            }
-        } catch (...) {
-            Destroy();
-            throw;
-        }
-    }
-
-    ~EnginePool() { Destroy(); }
-    EnginePool(const EnginePool&) = delete;
-    EnginePool& operator=(const EnginePool&) = delete;
-
-    Lease Acquire() {
-        std::unique_lock<std::mutex> lock(mutex_);
-        ready_.wait(lock, [&] { return !available_.empty(); });
-        const size_t index = available_.back();
-        available_.pop_back();
-        return Lease(*this, index);
-    }
-
-private:
-    void Release(size_t index) {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            available_.push_back(index);
-        }
-        ready_.notify_one();
-    }
-
-    void Destroy() {
-        for (auto& handle : handles_) {
-            lw_ppocr_destroy(&handle);
-        }
-        handles_.clear();
-    }
-
-    std::string model_manifest_;
-    std::vector<lw_ppocr_handle> handles_;
-    std::vector<size_t> available_;
-    std::mutex mutex_;
-    std::condition_variable ready_;
-};
-
 void SetJson(httplib::Response& response, const json& value, int status = 200) {
     response.status = status;
     response.set_header("Cache-Control", "no-store");
@@ -639,6 +602,42 @@ json ErrorResponse(
         {"error_code", error_code},
         {"error", message}
     };
+}
+
+class HttpError final : public std::runtime_error {
+public:
+    HttpError(int status, std::string code, std::string message)
+        : std::runtime_error(std::move(message)),
+          status_(status), code_(std::move(code)) {}
+
+    int status() const noexcept { return status_; }
+    const std::string& code() const noexcept { return code_; }
+
+private:
+    int status_;
+    std::string code_;
+};
+
+EnginePool::Lease AcquireEngine(
+    const ServiceConfig& config,
+    EnginePool& engines) {
+    auto acquired = engines.AcquireFor(
+        std::chrono::milliseconds(config.engine_wait_timeout_ms),
+        config.max_queued_requests);
+    switch (acquired.status) {
+    case EnginePool::AcquireStatus::Acquired:
+        return std::move(acquired.lease);
+    case EnginePool::AcquireStatus::QueueFull:
+        throw HttpError(429, "queue_full",
+            "OCR engine wait queue is full");
+    case EnginePool::AcquireStatus::TimedOut:
+        throw HttpError(503, "engine_wait_timeout",
+            "timed out waiting for an OCR engine");
+    case EnginePool::AcquireStatus::Stopping:
+        throw HttpError(503, "service_stopping",
+            "OCR service is stopping");
+    }
+    throw HttpError(503, "service_unavailable", "OCR service is unavailable");
 }
 
 bool ConstantTimeEquals(const std::string& left, const std::string& right) {
@@ -907,6 +906,9 @@ json CallRecognizeBatch(lw_ppocr_handle handle,
         pointers.data(), sizes.data(), images.size(), &output, &length);
     if (status != LW_PPOCR_STATUS_OK) {
         const std::string error = LastError(handle);
+        if (status == LW_PPOCR_STATUS_LIMIT_EXCEEDED) {
+            throw HttpError(413, "batch_limit_exceeded", error);
+        }
         if (status == LW_PPOCR_STATUS_INVALID_ARGUMENT ||
             status == LW_PPOCR_STATUS_IMAGE_ERROR) {
             throw std::invalid_argument(error);
@@ -924,6 +926,8 @@ json CallRecognizeBatch(lw_ppocr_handle handle,
 }
 
 void PrintStartupInfo(const ServiceConfig& config) {
+    const size_t max_http_threads =
+        config.worker_threads + config.max_queued_requests;
     std::cout
         << "============================================================\n"
         << kProduct << " HTTP Service v" << kVersion << '\n'
@@ -953,8 +957,17 @@ void PrintStartupInfo(const ServiceConfig& config) {
         << "  rec_concurrency: " << config.rec_concurrency << '\n'
         << "  engine_instances: " << config.engine_instances << '\n'
         << "  worker_threads: " << config.worker_threads << '\n'
+        << "  max_http_threads: " << max_http_threads << '\n'
+        << "  max_queued_requests: " << config.max_queued_requests << '\n'
+        << "  engine_wait_timeout_ms: "
+        << config.engine_wait_timeout_ms << '\n'
         << "  max_request_bytes: " << config.max_request_bytes << '\n'
         << "  max_image_pixels: " << config.max_image_pixels << '\n'
+        << "  max_batch_images: " << config.max_batch_images << '\n'
+        << "  max_batch_total_pixels: "
+        << config.max_batch_total_pixels << '\n'
+        << "  max_batch_decoded_bytes: "
+        << config.max_batch_decoded_bytes << '\n'
         << "  api_key: " << (config.api_key.empty()
             ? "disabled / 未启用"
             : "configured / 已配置 (value hidden / 明文已隐藏)") << '\n'
@@ -1011,7 +1024,7 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
             }
             const std::vector<uint8_t> encoded(
                 request.body.begin(), request.body.end());
-            auto lease = engines.Acquire();
+            auto lease = AcquireEngine(config, engines);
             native = CallOcr(lease.get(), encoded, recognition_only);
         } else {
             const json body = json::parse(request.body);
@@ -1026,9 +1039,13 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
                 }
                 operation = "recognize_batch";
                 const json& values = body.at("images_base64");
-                if (!values.is_array() || values.empty() || values.size() > 256) {
+                if (!values.is_array() || values.empty()) {
                     throw std::invalid_argument(
-                        "images_base64 must contain 1 to 256 strings");
+                        "images_base64 must be a non-empty array");
+                }
+                if (values.size() > config.max_batch_images) {
+                    throw HttpError(413, "batch_limit_exceeded",
+                        "images_base64 exceeds max_batch_images");
                 }
                 std::vector<std::vector<uint8_t>> images(values.size());
                 std::string error;
@@ -1043,7 +1060,7 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
                                 ? "Base64 string is required" : error));
                     }
                 }
-                auto lease = engines.Acquire();
+                auto lease = AcquireEngine(config, engines);
                 native = CallRecognizeBatch(lease.get(), images);
                 native["image_count"] = images.size();
             } else {
@@ -1063,7 +1080,7 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
                         config.max_request_bytes, encoded, error)) {
                     throw std::invalid_argument(error);
                 }
-                auto lease = engines.Acquire();
+                auto lease = AcquireEngine(config, engines);
                 native = CallOcr(lease.get(), encoded, recognition_only);
             }
         }
@@ -1076,6 +1093,15 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
         SetJson(response, native);
         LogRequest(config, request, response, request_id, operation, start,
             count, &native);
+    } catch (const HttpError& exception) {
+        SetJson(response, ErrorResponse(
+            request_id, exception.code(), exception.what()),
+            exception.status());
+        if (exception.status() == 429 || exception.status() == 503) {
+            response.set_header("Retry-After", "1");
+        }
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, exception.code());
     } catch (const json::exception&) {
         // A parser diagnostic may quote raw non-UTF-8 request bytes. Returning
         // it inside JSON can make serialization fail and turn a client error
@@ -1114,12 +1140,34 @@ int RunServer(const ServiceConfig& config,
         logger->info("initializing {} OpenCV DNN engine instance(s)",
             config.engine_instances);
     }
-    EnginePool engines(config);
+    EngineSettings engine_settings;
+    engine_settings.model_manifest = config.model_manifest.u8string();
+    engine_settings.enable_classifier = config.enable_classifier;
+    engine_settings.limit_side_len = config.limit_side_len;
+    engine_settings.det_db_threshold = config.det_db_threshold;
+    engine_settings.det_db_box_threshold = config.det_db_box_threshold;
+    engine_settings.det_db_unclip_ratio = config.det_db_unclip_ratio;
+    engine_settings.det_use_dilation = config.det_use_dilation;
+    engine_settings.cls_threshold = config.cls_threshold;
+    engine_settings.cls_batch_size = config.cls_batch_size;
+    engine_settings.rec_batch_size = config.rec_batch_size;
+    engine_settings.rec_concurrency = config.rec_concurrency;
+    engine_settings.max_image_pixels = config.max_image_pixels;
+    engine_settings.max_batch_images =
+        static_cast<uint32_t>(config.max_batch_images);
+    engine_settings.max_batch_total_pixels = config.max_batch_total_pixels;
+    engine_settings.max_batch_decoded_bytes = config.max_batch_decoded_bytes;
+    engine_settings.engine_instances = config.engine_instances;
+    EnginePool engines(engine_settings);
+    g_engine_pool.store(&engines);
 
     httplib::Server server;
     server.set_payload_max_length(config.max_request_bytes);
     server.new_task_queue = [&config] {
-        return new httplib::ThreadPool(config.worker_threads);
+        const size_t max_http_threads =
+            config.worker_threads + config.max_queued_requests;
+        return new httplib::ThreadPool(config.worker_threads,
+            max_http_threads, config.max_queued_requests);
     };
     if (!server.set_mount_point("/", config.web_root.u8string())) {
         throw std::runtime_error("unable to mount web_root");
@@ -1147,7 +1195,7 @@ int RunServer(const ServiceConfig& config,
     });
     server.set_error_handler([&config](const httplib::Request& request,
                                 httplib::Response& response) {
-        if (response.status == 413) {
+        if (response.status == 413 && response.body.empty()) {
             const auto start = Clock::now();
             const std::string request_id = NewRequestId();
             response.set_header("X-Request-ID", request_id);
@@ -1170,10 +1218,15 @@ int RunServer(const ServiceConfig& config,
 
     g_server.store(&server);
 #if defined(_WIN32)
-    if (g_service_stop_requested.load()) server.stop();
+    if (g_service_stop_requested.load()) {
+        engines.Stop();
+        server.stop();
+    }
 #endif
     const bool listened = server.listen(config.listen_host, config.port);
     g_server.store(nullptr);
+    g_engine_pool.store(nullptr);
+    engines.Stop();
     lw::ppocr::http::ShutdownLogging();
     if (!listened) {
         throw std::runtime_error("unable to listen on configured host and port");
@@ -1182,6 +1235,7 @@ int RunServer(const ServiceConfig& config,
 }
 
 void SignalHandler(int) {
+    if (EnginePool* engines = g_engine_pool.load()) engines->Stop();
     if (httplib::Server* server = g_server.load()) server->stop();
 }
 
@@ -1212,6 +1266,7 @@ void WINAPI WindowsServiceControlHandler(DWORD control) {
     }
     g_service_stop_requested.store(true);
     ReportWindowsServiceStatus(SERVICE_STOP_PENDING, NO_ERROR, 30000);
+    if (EnginePool* engines = g_engine_pool.load()) engines->Stop();
     if (httplib::Server* server = g_server.load()) server->stop();
 }
 

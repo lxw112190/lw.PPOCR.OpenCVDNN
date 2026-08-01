@@ -27,7 +27,7 @@ extern "C" {
 #define LW_PPOCR_VERSION_MAJOR 1u
 #define LW_PPOCR_VERSION_MINOR 0u
 #define LW_PPOCR_VERSION_PATCH 0u
-#define LW_PPOCR_VERSION_STRING "1.0.0-rc.2"
+#define LW_PPOCR_VERSION_STRING "1.0.0-rc.3"
 #define LW_PPOCR_PRODUCT_NAME "lw.PPOCR.OpenCVDNN"
 
 typedef struct lw_ppocr_engine* lw_ppocr_handle;
@@ -41,7 +41,8 @@ enum {
     LW_PPOCR_STATUS_IMAGE_ERROR = -3,
     LW_PPOCR_STATUS_INFERENCE_ERROR = -4,
     LW_PPOCR_STATUS_OUT_OF_MEMORY = -5,
-    LW_PPOCR_STATUS_INTERNAL_ERROR = -6
+    LW_PPOCR_STATUS_INTERNAL_ERROR = -6,
+    LW_PPOCR_STATUS_LIMIT_EXCEEDED = -7
 };
 
 enum {
@@ -88,7 +89,13 @@ typedef struct lw_ppocr_config {
     lw_ppocr_log_callback log_callback;
     void* log_user_data;
 
-    int32_t reserved_i32[8];
+    /* Batch-recognition safety limits. Zero selects the library default. */
+    uint32_t max_batch_images;
+    uint32_t reserved_batch_u32;
+    uint64_t max_batch_total_pixels;
+    uint64_t max_batch_decoded_bytes;
+
+    int32_t reserved_i32[2];
     const void* reserved_ptr[4];
 } lw_ppocr_config;
 

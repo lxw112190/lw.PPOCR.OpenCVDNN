@@ -19,7 +19,7 @@ env:
   OPENCV_VERSION: 5.0.0
   OPENCV_SOURCE_SHA256: b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
   CMAKE_VERSION: 3.31.6
-  PACKAGE_VERSION: 1.0.0-rc.2
+  PACKAGE_VERSION: 1.0.0-rc.3
   PACKAGE_PLATFORM: arm64-uos20
 
 jobs:
@@ -116,6 +116,7 @@ jobs:
         run: |
           bash -n deploy/linux/*.sh scripts/package_linux.sh
           python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py \
+            scripts/http_overload_test.py \
             scripts/http_invalid_inputs.py scripts/http_contract_test.py \
             scripts/config_contract_test.py \
             scripts/ocr_regression.py scripts/logging_smoke.py scripts/json_schema.py \
@@ -183,6 +184,8 @@ jobs:
             --library "$package/liblw.PPOCR.OpenCVDNN.so"
           python3 scripts/http_stress.py --package-dir "$package" \
             --iterations 64 --concurrency 2 --port 18788
+          python3 scripts/http_overload_test.py --package-dir "$package" \
+            --port 18781
 
           for binary in "$package/lw-ppocr-http-service" \
                         "$package/lw-ppocr-c-example" \

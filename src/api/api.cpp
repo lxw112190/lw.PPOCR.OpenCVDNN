@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <new>
@@ -23,11 +24,24 @@ using Clock = std::chrono::steady_clock;
 struct lw_ppocr_engine {
     std::unique_ptr<lw::ppocr::opencv_dnn::OcrEngine> engine;
     uint64_t max_image_pixels = 40000000;
+    uint32_t max_batch_images = 32;
+    uint64_t max_batch_total_pixels = 40000000;
+    uint64_t max_batch_decoded_bytes = 120000000;
 };
 
 namespace {
 
 thread_local std::string g_last_error;
+
+constexpr uint32_t kDefaultMaxBatchImages = 32;
+constexpr uint64_t kDefaultMaxBatchTotalPixels = 40000000;
+constexpr uint64_t kDefaultMaxBatchDecodedBytes = 120000000;
+constexpr size_t kBatchChunkSize = 8;
+
+class LimitExceeded final : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 bool HasKnownImageSignature(const uint8_t* data, uint64_t size) {
     if (data == nullptr) return false;
@@ -158,6 +172,15 @@ json RecognitionJson(
     };
 }
 
+void AccumulateTiming(
+    lw::ppocr::core::StageTiming& destination,
+    const lw::ppocr::core::StageTiming& source) {
+    destination.preprocess_ms += source.preprocess_ms;
+    destination.inference_ms += source.inference_ms;
+    destination.postprocess_ms += source.postprocess_ms;
+    destination.total_ms += source.total_ms;
+}
+
 void AllocateJson(
     const json& document,
     char** result,
@@ -187,6 +210,9 @@ lw_ppocr_status Guard(Function&& function, lw_ppocr_status default_status) {
     } catch (const std::bad_alloc&) {
         g_last_error = "out of memory";
         return LW_PPOCR_STATUS_OUT_OF_MEMORY;
+    } catch (const LimitExceeded& exception) {
+        g_last_error = exception.what();
+        return LW_PPOCR_STATUS_LIMIT_EXCEEDED;
     } catch (const std::exception& exception) {
         g_last_error = exception.what();
         return default_status;
@@ -225,6 +251,9 @@ void LW_PPOCR_CALL lw_ppocr_config_init(lw_ppocr_config* config) {
     config->rec_batch_size = 8;
     config->rec_concurrency = 1;
     config->max_image_pixels = 40000000;
+    config->max_batch_images = kDefaultMaxBatchImages;
+    config->max_batch_total_pixels = kDefaultMaxBatchTotalPixels;
+    config->max_batch_decoded_bytes = kDefaultMaxBatchDecodedBytes;
     config->log_level = LW_PPOCR_LOG_OFF;
 }
 
@@ -255,15 +284,27 @@ lw_ppocr_status LW_PPOCR_CALL lw_ppocr_create(
         return LW_PPOCR_STATUS_INVALID_ARGUMENT;
     }
     *handle = nullptr;
+    const uint32_t max_batch_images = config->max_batch_images == 0
+        ? kDefaultMaxBatchImages : config->max_batch_images;
+    const uint64_t max_batch_total_pixels = config->max_batch_total_pixels == 0
+        ? kDefaultMaxBatchTotalPixels : config->max_batch_total_pixels;
+    const uint64_t max_batch_decoded_bytes =
+        config->max_batch_decoded_bytes == 0
+        ? kDefaultMaxBatchDecodedBytes : config->max_batch_decoded_bytes;
     if (config->limit_side_len < 32 || config->max_image_pixels == 0 ||
         config->cls_batch_size < 1 || config->rec_batch_size < 1 ||
-        config->rec_concurrency < 1) {
+        config->rec_concurrency < 1 || max_batch_images < 1 ||
+        max_batch_images > 256 || max_batch_total_pixels < 1 ||
+        max_batch_decoded_bytes < 1) {
         g_last_error = "OCR numeric configuration is invalid";
         return LW_PPOCR_STATUS_INVALID_ARGUMENT;
     }
     return Guard([&]() {
         auto owned = std::make_unique<lw_ppocr_engine>();
         owned->max_image_pixels = config->max_image_pixels;
+        owned->max_batch_images = max_batch_images;
+        owned->max_batch_total_pixels = max_batch_total_pixels;
+        owned->max_batch_decoded_bytes = max_batch_decoded_bytes;
         owned->engine =
             std::make_unique<lw::ppocr::opencv_dnn::OcrEngine>(*config);
         *handle = owned.release();
@@ -317,17 +358,51 @@ lw_ppocr_status LW_PPOCR_CALL lw_ppocr_recognize_batch_encoded(
         g_last_error = "recognition arguments are invalid";
         return LW_PPOCR_STATUS_INVALID_ARGUMENT;
     }
+    if (image_count > handle->max_batch_images) {
+        g_last_error = "batch exceeds max_batch_images";
+        return LW_PPOCR_STATUS_LIMIT_EXCEEDED;
+    }
     return Guard([&]() {
-        const auto decode_start = Clock::now();
-        std::vector<cv::Mat> images;
-        images.reserve(static_cast<size_t>(image_count));
-        for (uint64_t index = 0; index < image_count; ++index) {
-            images.push_back(DecodeImage(encoded_images[index],
-                encoded_sizes[index], handle->max_image_pixels));
+        uint64_t total_pixels = 0;
+        uint64_t total_decoded_bytes = 0;
+        double decode_ms = 0.0;
+        lw::ppocr::core::RecognitionResult combined;
+        combined.items.reserve(static_cast<size_t>(image_count));
+
+        for (uint64_t begin = 0; begin < image_count;
+             begin += kBatchChunkSize) {
+            const uint64_t end = (std::min)(
+                image_count, begin + static_cast<uint64_t>(kBatchChunkSize));
+            std::vector<cv::Mat> images;
+            images.reserve(static_cast<size_t>(end - begin));
+            const auto decode_start = Clock::now();
+            for (uint64_t index = begin; index < end; ++index) {
+                cv::Mat image = DecodeImage(encoded_images[index],
+                    encoded_sizes[index], handle->max_image_pixels);
+                const uint64_t pixels = static_cast<uint64_t>(image.total());
+                const uint64_t bytes = pixels * image.elemSize();
+                if (pixels > handle->max_batch_total_pixels - total_pixels ||
+                    bytes > handle->max_batch_decoded_bytes -
+                        total_decoded_bytes) {
+                    throw LimitExceeded(
+                        "batch exceeds cumulative decoded image limits");
+                }
+                total_pixels += pixels;
+                total_decoded_bytes += bytes;
+                images.push_back(std::move(image));
+            }
+            decode_ms += Milliseconds(decode_start, Clock::now());
+
+            auto partial = handle->engine->RecognizeBatch(std::move(images));
+            combined.items.insert(combined.items.end(),
+                std::make_move_iterator(partial.items.begin()),
+                std::make_move_iterator(partial.items.end()));
+            AccumulateTiming(combined.classifier, partial.classifier);
+            AccumulateTiming(combined.recognizer, partial.recognizer);
+            AccumulateTiming(combined.pipeline, partial.pipeline);
         }
-        const double decode_ms = Milliseconds(decode_start, Clock::now());
-        AllocateJson(RecognitionJson(handle->engine->RecognizeBatch(images),
-            decode_ms), result_json_utf8, result_json_length);
+        AllocateJson(RecognitionJson(combined, decode_ms),
+            result_json_utf8, result_json_length);
     }, LW_PPOCR_STATUS_INFERENCE_ERROR);
 }
 

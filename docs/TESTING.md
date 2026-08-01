@@ -9,6 +9,8 @@ proof of correctness:
   orientation classification, JSON/Base64, binary upload, and ordered batches;
 - contract tests against the frozen OpenAPI and JSON schemas;
 - malformed and hostile HTTP input tests followed by a recovery request;
+- bounded engine-queue tests covering `429`, `503`, shutdown wake-up, and
+  post-overload recovery;
 - concurrency, varied image sizes, RSS-growth monitoring, and a 5,000-iteration
   scheduled Windows stability run;
 - C ABI export checks and platform dependency checks;
@@ -27,7 +29,7 @@ python3 scripts/validate_model_manifest.py \
 python3 scripts/validate_release_version.py
 python3 scripts/validate_contracts.py
 python3 scripts/validate_dependencies.py
-python3 scripts/generate_sbom.py --version 1.0.0-rc.2 \
+python3 scripts/generate_sbom.py --version 1.0.0-rc.3 \
   --output build/lw.PPOCR.OpenCVDNN.cdx.json
 ```
 

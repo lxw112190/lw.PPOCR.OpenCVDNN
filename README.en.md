@@ -6,17 +6,18 @@ A small, cross-platform PP-OCR inference project powered exclusively by **OpenCV
 
 The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the CPU. Paddle Runtime, ONNX Runtime, DirectML, OpenVINO, and TensorRT are not required.
 
-> Current release candidate: `v1.0.0-rc.2`. C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and log Schema v1 are frozen. The RC phase accepts bug fixes only and no longer changes public interfaces. Validate the candidate package on the target environment before production use.
+> Current release candidate: `v1.0.0-rc.3`. This is the final intentional pre-1.0 refreeze, adding bounded queues, engine wait timeouts, and cumulative batch resource limits. The remaining RC phase accepts bug fixes only and no longer changes public interfaces. Validate the candidate package on the target environment before production use.
 
 ## Features
 
 - Full OCR: detection, optional direction classification, and recognition.
-- Recognition only: skips detection for pre-cropped text-line images; batches of 1–256 images are supported.
+- Recognition only: skips detection for pre-cropped text-line images. HTTP batches default to 32 images, may be configured up to 256, and are inferred in chunks of eight.
 - C API: accepts encoded JPEG/PNG/BMP image bytes and returns UTF-8 JSON.
 - C, C# P/Invoke, and Python ctypes examples.
 - HTTP endpoints support direct binary image uploads and compatible JSON/Base64 requests through `/api/ocr`, `/api/recognize`, and `/health`; the `result` field matches `lw.PPOCR.Inference`.
 - Browser page with detected regions, confidence scores, and stage timings.
 - Optional API Key; runtime and request logging can be controlled independently.
+- Production safeguards: bounded HTTP/engine queues, `429` on a full engine wait queue, `503` on engine wait timeout, and cumulative decoded-memory limits for batches.
 - Nginx-inspired log operations: split runtime/access logs, JSON Lines, request IDs, stage timings, trusted proxies, and privacy safeguards.
 - Docker and Docker Compose with a non-root Linux x64 image, health checks, persistent logs, and GHCR publishing.
 - Correctness and robustness gates for fixed images, text order, orientation, confidence, boxes, batch order, malformed-input recovery, ASan/UBSan, and long-run memory growth.
@@ -54,12 +55,12 @@ Open <http://127.0.0.1:8787/>. Startup output always shows the author, QQ contac
 
 ### Docker / Docker Compose
 
-`v1.0.0-rc.2` provides a release-candidate `linux/amd64` image for final validation. After the tag is published:
+`v1.0.0-rc.3` provides a release-candidate `linux/amd64` image for final validation. After the tag is published:
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.3
 ```
 
 With Compose:
@@ -191,6 +192,7 @@ Linux and macOS CI save OpenCV only after a successful build and install, while 
 
 ## Quality, security, and compatibility documents
 
+- [v1.0.0-rc.3 release candidate notes](docs/releases/v1.0.0-rc.3.md)
 - [v1.0.0-rc.2 release candidate notes](docs/releases/v1.0.0-rc.2.md)
 - [Compatibility matrix](docs/COMPATIBILITY.md)
 - [Frozen v1 contracts](docs/CONTRACTS.md)
@@ -200,7 +202,7 @@ Linux and macOS CI save OpenCV only after a successful build and install, while 
 
 ## Concurrency
 
-One engine instance serializes inference. The HTTP service uses `engine_instances` independent instances for parallel work; every additional instance loads another copy of all three models. Start with one engine and four HTTP workers, then tune using measurements from the target machine.
+One engine instance serializes inference. The HTTP service uses `engine_instances` independent instances for parallel work; every additional instance loads another copy of all three models. Start with `engine_instances=1`, `worker_threads=4`, `max_queued_requests=32`, and `engine_wait_timeout_ms=5000`, then tune on the target machine. The HTTP pool keeps `worker_threads` base threads and may temporarily expand by the bounded wait allowance during overload. Requests that reach application admission receive `429` when the engine wait queue is full and `503` when the wait times out. The low-level task queue uses the same hard bound and may reject the connection during a more extreme burst.
 
 ## License and contact
 

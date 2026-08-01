@@ -8,7 +8,7 @@ service, and the browser page.
 
 ### 使用预构建镜像
 
-发布 `v1.0.0-rc.2` 标签后，可直接运行 GitHub Container Registry 候选镜像：
+发布 `v1.0.0-rc.3` 标签后，可直接运行 GitHub Container Registry 候选镜像：
 
 ```bash
 docker run -d \
@@ -16,7 +16,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8787:8787 \
   -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.3
 ```
 
 访问 <http://127.0.0.1:8787/>。查看状态和日志：
@@ -41,7 +41,7 @@ docker compose logs -f ppocr
 
 ```bash
 docker build --platform linux/amd64 \
-  -t ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2 .
+  -t ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.3 .
 docker compose up -d
 ```
 
@@ -84,7 +84,7 @@ API Key 不会写入启动输出或请求日志。启动输出只显示
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `PPOCR_IMAGE` | `ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2` | 镜像名称和标签 |
+| `PPOCR_IMAGE` | `ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.3` | 镜像名称和标签 |
 | `PPOCR_PORT` | `8787` | 宿主机映射端口 |
 | `PPOCR_API_KEY` | 空 | 空值表示不启用认证 |
 | `PPOCR_ENGINE_INSTANCES` | `1` | 独立模型实例数量，增加后会显著增加内存 |
@@ -100,7 +100,7 @@ API Key 不会写入启动输出或请求日志。启动输出只显示
 
 ### Prebuilt image
 
-After the `v1.0.0-rc.2` image is published:
+After the `v1.0.0-rc.3` image is published:
 
 ```bash
 docker run -d \
@@ -108,7 +108,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8787:8787 \
   -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.3
 ```
 
 Open <http://127.0.0.1:8787/>. The container runs as the non-root UID/GID
@@ -137,8 +137,10 @@ The same variables can be applied directly to the native HTTP executable:
 | `LW_PPOCR_LISTEN_HOST`, `LW_PPOCR_PORT` | Listen endpoint |
 | `LW_PPOCR_MODEL_MANIFEST`, `LW_PPOCR_WEB_ROOT` | Model manifest and web root paths |
 | `LW_PPOCR_API_KEY` | API Key; an empty value disables authentication |
-| `LW_PPOCR_ENGINE_INSTANCES`, `LW_PPOCR_WORKER_THREADS` | Concurrency controls |
-| `LW_PPOCR_MAX_REQUEST_BYTES`, `LW_PPOCR_MAX_IMAGE_PIXELS` | Input limits |
+| `LW_PPOCR_ENGINE_INSTANCES`, `LW_PPOCR_WORKER_THREADS` | Inference and HTTP worker concurrency |
+| `LW_PPOCR_MAX_QUEUED_REQUESTS`, `LW_PPOCR_ENGINE_WAIT_TIMEOUT_MS` | Bounded queue and engine wait timeout |
+| `LW_PPOCR_MAX_REQUEST_BYTES`, `LW_PPOCR_MAX_IMAGE_PIXELS` | Single-request and single-image limits |
+| `LW_PPOCR_MAX_BATCH_IMAGES`, `LW_PPOCR_MAX_BATCH_TOTAL_PIXELS`, `LW_PPOCR_MAX_BATCH_DECODED_BYTES` | Batch count and cumulative decoded-memory limits |
 | `LW_PPOCR_LOGGING_ENABLED` | Master logging switch |
 | `LW_PPOCR_CONSOLE_LOGGING_ENABLED` | Console logging switch |
 | `LW_PPOCR_FILE_LOGGING_ENABLED`, `LW_PPOCR_LOG_FILE` | Runtime rotating-file switch and path |

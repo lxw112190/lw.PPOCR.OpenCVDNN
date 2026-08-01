@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate frozen HTTP/config/log schemas and their immutable digest lock."""
+"""Validate HTTP/config/log schemas against the reviewed v1 digest lock."""
 
 import argparse
 import hashlib
@@ -37,7 +37,8 @@ def main() -> int:
         if actual != expected:
             raise RuntimeError(
                 f"frozen contract changed: {name}: expected {expected}, "
-                f"got {actual}; add a v2 schema instead of editing v1")
+                f"got {actual}; before 1.0 review and refresh the lock, "
+                f"after 1.0 add a v2 schema instead of editing v1")
 
     config_schema = json.loads((schema_directory /
         "http-service-config-v1.schema.json").read_text(encoding="utf-8"))

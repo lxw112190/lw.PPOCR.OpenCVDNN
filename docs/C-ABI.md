@@ -18,6 +18,10 @@ baseline (`docs/exports-v1.txt` in a release package).
   callers and may only acquire documented meaning in a compatible release.
 - Status and log-level numeric values are frozen. New values may be appended;
   existing values cannot change.
+- `lw_ppocr_config` includes `max_batch_images`, `max_batch_total_pixels`, and
+  `max_batch_decoded_bytes`. Batch recognition processes at most eight decoded
+  images at once and reports `LW_PPOCR_STATUS_LIMIT_EXCEEDED` when a cumulative
+  limit is exceeded.
 - A breaking change requires a new API version and new ABI baseline. Product
   version changes such as 0.3.x do not by themselves change the ABI version.
 - The library accepts encoded image bytes only for the duration of a call. JSON
@@ -33,6 +37,9 @@ baseline (`docs/exports-v1.txt` in a release package).
 - `lw_ppocr_version` 与 `lw_ppocr_config` 的字段顺序、对齐、含义和大小冻结；
   调用方必须把保留字段置零。
 - 状态码和日志级别的既有数值冻结，只允许追加新值。
+- `lw_ppocr_config` 包含 `max_batch_images`、`max_batch_total_pixels` 和
+  `max_batch_decoded_bytes`；批量仅识别每次最多保留 8 张解码图片，累计资源超限时
+  返回 `LW_PPOCR_STATUS_LIMIT_EXCEEDED`。
 - 破坏性变更必须升级 API version 并建立新的 ABI 基线；产品版本升级不等于 ABI 升级。
 - 输入图片字节只需在调用期间有效；返回 JSON 必须使用同一动态库的
   `lw_ppocr_string_free` 释放。

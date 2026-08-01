@@ -18,8 +18,8 @@ ARMv8-A。OpenCV 5.0.0、OCR 动态库、HTTP 服务、模型、网页、GCC 运
 ## CI package / CI 产物
 
 ```text
-lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz
-lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz.sha256
+lw.PPOCR.OpenCVDNN-v1.0.0-rc.3-linux-arm64-uos20.tar.gz
+lw.PPOCR.OpenCVDNN-v1.0.0-rc.3-linux-arm64-uos20.tar.gz.sha256
 ```
 
 The workflow validates the native architecture, maximum required glibc symbol
@@ -36,9 +36,9 @@ CI 会验证 AArch64 ELF、最高 GLIBC 符号版本、单元测试、真实 OCR
 ```bash
 uname -m
 getconf GNU_LIBC_VERSION
-sha256sum -c lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz.sha256
-tar -xzf lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz
-cd lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20
+sha256sum -c lw.PPOCR.OpenCVDNN-v1.0.0-rc.3-linux-arm64-uos20.tar.gz.sha256
+tar -xzf lw.PPOCR.OpenCVDNN-v1.0.0-rc.3-linux-arm64-uos20.tar.gz
+cd lw.PPOCR.OpenCVDNN-v1.0.0-rc.3-linux-arm64-uos20
 chmod +x run-http-service.sh
 ./run-http-service.sh
 ```

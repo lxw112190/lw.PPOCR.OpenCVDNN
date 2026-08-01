@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 1.0.0-rc.2
+  PACKAGE_VERSION: 1.0.0-rc.3
   OPENCV_VERSION: 5.0.0
   OPENCV_SOURCE_SHA256: b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
 

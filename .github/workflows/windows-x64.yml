@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 1.0.0-rc.2
+  PACKAGE_VERSION: 1.0.0-rc.3
   OPENCV_WINDOWS_SHA256: 9c6c1fcea58acdf06edba13148b2246e00c2658143fa51e61ecd370db8c39f63
 
 jobs:
@@ -157,6 +157,8 @@ jobs:
             --port 18784
           python scripts/http_contract_test.py --package-dir $package `
             --port 18782
+          python scripts/http_overload_test.py --package-dir $package `
+            --port 18781
           python scripts/check_abi.py `
             --library "$package/lw.PPOCR.OpenCVDNN.dll"
           $iterations = 64

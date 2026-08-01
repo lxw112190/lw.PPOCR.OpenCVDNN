@@ -100,6 +100,9 @@ def main() -> int:
     config["worker_threads"] = 2
     config["max_request_bytes"] = 1024 * 1024
     config["max_image_pixels"] = 1_000_000
+    config["max_batch_images"] = 4
+    config["max_batch_total_pixels"] = 1_000_000
+    config["max_batch_decoded_bytes"] = 3_000_000
     config["logging"] = {
         "enabled": False,
         "level": "info",
@@ -209,7 +212,6 @@ def main() -> int:
             ("batch-null", None),
             ("batch-string", "value"),
             ("batch-empty", []),
-            ("batch-too-large", [""] * 257),
             ("batch-non-string", [7]),
             ("batch-corrupt-image", [base64.b64encode(
                 b"not an image").decode("ascii")]),
@@ -217,6 +219,17 @@ def main() -> int:
         for name, values in batch_cases:
             invalid.append(expect_error(name, 400, "invalid_request",
                 post_json(recognize, {"images_base64": values}, secret)))
+
+        invalid.append(expect_error("batch-too-large", 413,
+            "batch_limit_exceeded", post_json(recognize,
+                {"images_base64": ["AAAA"] *
+                    (config["max_batch_images"] + 1)}, secret)))
+        cumulative_image = base64.b64encode(
+            make_solid_png(800, 700)).decode("ascii")
+        invalid.append(expect_error("batch-decoded-limit", 413,
+            "batch_limit_exceeded", post_json(recognize,
+                {"images_base64": [cumulative_image, cumulative_image]},
+                secret)))
 
         invalid.append(expect_error("oversized-request", 413,
             "payload_too_large", request(ocr,

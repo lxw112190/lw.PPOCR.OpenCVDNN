@@ -18,8 +18,13 @@
   "rec_concurrency": 1,
   "engine_instances": 1,
   "worker_threads": 4,
+  "max_queued_requests": 32,
+  "engine_wait_timeout_ms": 5000,
   "max_request_bytes": 20971520,
   "max_image_pixels": 40000000,
+  "max_batch_images": 32,
+  "max_batch_total_pixels": 40000000,
+  "max_batch_decoded_bytes": 120000000,
   "logging": {
     "enabled": true,
     "level": "info",

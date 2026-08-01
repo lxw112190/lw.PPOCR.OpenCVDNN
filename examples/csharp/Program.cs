@@ -115,7 +115,11 @@ internal static class Native
         internal int LogLevel;
         internal IntPtr LogCallback;
         internal IntPtr LogUserData;
-        internal fixed int ReservedI32[8];
+        internal uint MaxBatchImages;
+        internal uint ReservedBatchU32;
+        internal ulong MaxBatchTotalPixels;
+        internal ulong MaxBatchDecodedBytes;
+        internal fixed int ReservedI32[2];
         internal IntPtr ReservedPtr0;
         internal IntPtr ReservedPtr1;
         internal IntPtr ReservedPtr2;

@@ -2,13 +2,13 @@
 
 ## Supported versions / 支持版本
 
-`v1.0.0-rc.2` is a release candidate for final compatibility validation, not
+`v1.0.0-rc.3` is a release candidate for final compatibility validation, not
 an LTS release. Fixes are provided for the latest published RC during the RC
 phase. After `v1.0.0` is released, security fixes will target the latest 1.x
 minor release while the frozen v1 ABI and machine-readable contracts remain
 backward compatible throughout the 1.x line.
 
-`v1.0.0-rc.2` 是用于最终兼容性验证的候选版本，不是 LTS 正式版。RC 阶段只维护最新的
+`v1.0.0-rc.3` 是用于最终兼容性验证的候选版本，不是 LTS 正式版。RC 阶段只维护最新的
 候选版本；`v1.0.0` 正式发布后，安全修复面向最新 1.x 次版本提供，同时在整个 1.x
 周期内保持已冻结的 C ABI v1 与机器可读契约向后兼容。
 

@@ -94,6 +94,7 @@ if(LW_PPOCR_BUILD_HTTP_SERVICE)
     add_executable(lw-ppocr-http-service
         apps/http_service.cpp
         src/http/base64.cpp
+        src/http/engine_pool.cpp
         src/http/logging.cpp)
     target_include_directories(lw-ppocr-http-service PRIVATE
         include
@@ -127,6 +128,23 @@ if(BUILD_TESTING AND LW_PPOCR_BUILD_TESTS)
     target_link_libraries(lw-ppocr-api-test PRIVATE lw_ppocr)
     lw_ppocr_enable_sanitizers(lw-ppocr-api-test)
     add_test(NAME api_version COMMAND lw-ppocr-api-test)
+    add_executable(lw-ppocr-engine-pool-test
+        tests/engine_pool_test.cpp
+        src/http/engine_pool.cpp
+        src/http/logging.cpp)
+    target_include_directories(lw-ppocr-engine-pool-test PRIVATE
+        include
+        src/http
+        third_party/spdlog/include)
+    target_link_libraries(lw-ppocr-engine-pool-test PRIVATE
+        lw_ppocr Threads::Threads)
+    if(MSVC)
+        target_compile_options(lw-ppocr-engine-pool-test PRIVATE /utf-8 /EHsc)
+    endif()
+    lw_ppocr_enable_sanitizers(lw-ppocr-engine-pool-test)
+    add_test(NAME engine_pool_admission
+        COMMAND lw-ppocr-engine-pool-test
+            ${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/model.json)
     add_executable(lw-ppocr-model-manifest-test
         tests/model_manifest_test.cpp
         src/core/model_manifest.cpp)
@@ -186,6 +204,7 @@ install(FILES
     docs/releases/v0.7.0.md
     docs/releases/v1.0.0-rc.1.md
     docs/releases/v1.0.0-rc.2.md
+    docs/releases/v1.0.0-rc.3.md
     DESTINATION docs/releases)
 install(FILES tests/abi/exports-v1.txt DESTINATION docs)
 install(DIRECTORY tests/fixtures DESTINATION tests)
@@ -197,6 +216,7 @@ install(FILES
     scripts/generate_sbom.py
     scripts/http_contract_test.py
     scripts/http_invalid_inputs.py
+    scripts/http_overload_test.py
     scripts/http_smoke.py
     scripts/http_stress.py
     scripts/json_schema.py
@@ -205,6 +225,7 @@ install(FILES
     scripts/validate_contracts.py
     scripts/validate_dependencies.py
     scripts/validate_model_manifest.py
+    scripts/validate_release_version.py
     DESTINATION scripts)
 install(DIRECTORY examples/python DESTINATION examples)
 install(DIRECTORY examples/csharp DESTINATION examples

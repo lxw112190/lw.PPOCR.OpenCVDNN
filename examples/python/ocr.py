@@ -28,7 +28,11 @@ class Config(ctypes.Structure):
         ("log_level", ctypes.c_int32),
         ("log_callback", ctypes.c_void_p),
         ("log_user_data", ctypes.c_void_p),
-        ("reserved_i32", ctypes.c_int32 * 8),
+        ("max_batch_images", ctypes.c_uint32),
+        ("reserved_batch_u32", ctypes.c_uint32),
+        ("max_batch_total_pixels", ctypes.c_uint64),
+        ("max_batch_decoded_bytes", ctypes.c_uint64),
+        ("reserved_i32", ctypes.c_int32 * 2),
         ("reserved_ptr", ctypes.c_void_p * 4),
     ]
 

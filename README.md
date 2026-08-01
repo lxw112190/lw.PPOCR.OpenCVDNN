@@ -6,17 +6,18 @@
 
 当前内置模型为 PP-OCRv6 Tiny Chinese，推理设备为 CPU。项目不依赖 Paddle Runtime、ONNX Runtime、DirectML、OpenVINO 或 TensorRT。
 
-> 当前候选版本：`v1.0.0-rc.2`。C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与日志 Schema v1 均已冻结；RC 阶段只接受 Bug 修复，不再调整公共接口。正式生产部署前请在目标环境验证候选包。
+> 当前候选版本：`v1.0.0-rc.3`。这是正式 1.0 前最后一次有意重冻结：补齐生产级有界队列、等待超时和批量累计资源限制。此后 RC 阶段只接受 Bug 修复，不再调整公共接口。正式生产部署前请在目标环境验证候选包。
 
 ## 主要能力
 
 - 完整 OCR：检测 → 可选方向分类 → 文字识别。
-- 仅识别：客户已裁剪文字区域时，跳过检测并支持 1～256 张批量识别。
+- 仅识别：客户已裁剪文字区域时跳过检测；HTTP 默认每批最多 32 张，配置上限为 256 张，并按 8 张分块推理。
 - 稳定 C API：输入 JPEG/PNG/BMP 等编码图片字节，输出 UTF-8 JSON。
 - C、C# P/Invoke 和 Python ctypes 调用示例。
 - HTTP API：支持图片二进制直传和兼容的 JSON/Base64 请求，提供 `/api/ocr`、`/api/recognize`、`/health`；`result` 字段与 `lw.PPOCR.Inference` 保持一致。
 - 浏览器体验页：显示识别文本、置信度、阶段耗时，并在原图绘制文字区域。
 - 可选 API Key；运行日志和请求日志可分别开关。
+- 生产保护：HTTP 与引擎等待队列有界，队列满返回 `429`，等待引擎超时返回 `503`；批量请求受累计像素和解码内存限制。
 - Nginx 风格日志治理：runtime/access 分离、JSON Lines、请求 ID、阶段耗时、可信代理与隐私保护。
 - Docker / Docker Compose：Linux x64 非 root 镜像、健康检查、持久化日志和 GHCR 发布。
 - 正确性与健壮性回归：固定样图、文字顺序、方向分类、置信度、检测框、批量顺序、异常输入恢复、ASan/UBSan 与长时间内存增长均有自动门禁。
@@ -56,12 +57,12 @@ chmod +x run-http-service.sh
 
 ### Docker / Docker Compose
 
-`v1.0.0-rc.2` 提供用于最终验证的 `linux/amd64` 候选容器镜像。标签发布后可直接运行：
+`v1.0.0-rc.3` 提供用于最终验证的 `linux/amd64` 候选容器镜像。标签发布后可直接运行：
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.3
 ```
 
 使用 Compose：
@@ -221,6 +222,7 @@ Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相�
 
 ## 质量、安全与兼容性文档
 
+- [v1.0.0-rc.3 发布候选说明](docs/releases/v1.0.0-rc.3.md)
 - [v1.0.0-rc.2 发布候选说明](docs/releases/v1.0.0-rc.2.md)
 - [兼容矩阵](docs/COMPATIBILITY.md)
 - [v1 契约冻结规则](docs/CONTRACTS.md)
@@ -230,7 +232,7 @@ Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相�
 
 ## 并发建议
 
-单个推理实例内部串行执行。HTTP 服务通过 `engine_instances` 创建多个独立实例实现并行；每增加一个实例会重复加载三套模型并增加内存占用。通常从 `engine_instances=1`、`worker_threads=4` 开始压测，再按 CPU 核数和内存调整。
+单个推理实例内部串行执行。HTTP 服务通过 `engine_instances` 创建多个独立实例实现并行；每增加一个实例会重复加载三套模型并增加内存占用。通常从 `engine_instances=1`、`worker_threads=4`、`max_queued_requests=32`、`engine_wait_timeout_ms=5000` 开始压测，再按 CPU 核数、内存和延迟目标调整。HTTP 线程池以 `worker_threads` 为常驻线程数，过载期间最多按等待上限临时扩展；已经进入应用层但超过引擎等待名额的请求返回 `429`，等待超时返回 `503`。底层任务队列也使用相同硬上限，极端突发超过它时会直接拒绝连接。
 
 ## 许可证
 

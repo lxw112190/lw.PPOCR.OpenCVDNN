@@ -41,6 +41,8 @@
           "400": {"$ref": "#/components/responses/Error"},
           "401": {"$ref": "#/components/responses/Error"},
           "413": {"$ref": "#/components/responses/Error"},
+          "429": {"$ref": "#/components/responses/Error"},
+          "503": {"$ref": "#/components/responses/Error"},
           "500": {"$ref": "#/components/responses/Error"}
         }
       }
@@ -67,6 +69,8 @@
           "400": {"$ref": "#/components/responses/Error"},
           "401": {"$ref": "#/components/responses/Error"},
           "413": {"$ref": "#/components/responses/Error"},
+          "429": {"$ref": "#/components/responses/Error"},
+          "503": {"$ref": "#/components/responses/Error"},
           "500": {"$ref": "#/components/responses/Error"}
         }
       }
@@ -78,7 +82,8 @@
     },
     "headers": {
       "RequestId": {"schema": {"type": "string", "minLength": 1}},
-      "ApiVersion": {"schema": {"const": "1"}}
+      "ApiVersion": {"schema": {"const": "1"}},
+      "RetryAfter": {"schema": {"type": "integer", "minimum": 0}}
     },
     "responses": {
       "OcrSuccess": {
@@ -101,7 +106,8 @@
         "description": "Stable error response",
         "headers": {
           "X-Request-ID": {"$ref": "#/components/headers/RequestId"},
-          "X-LW-PPOCR-API-Version": {"$ref": "#/components/headers/ApiVersion"}
+          "X-LW-PPOCR-API-Version": {"$ref": "#/components/headers/ApiVersion"},
+          "Retry-After": {"$ref": "#/components/headers/RetryAfter"}
         },
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
       }
@@ -223,7 +229,7 @@
         "required": ["ok", "request_id", "error_code", "error"],
         "properties": {
           "ok": {"const": false}, "request_id": {"type": "string", "minLength": 1},
-          "error_code": {"enum": ["unauthorized", "invalid_json", "invalid_request", "payload_too_large", "internal_error"]},
+          "error_code": {"enum": ["unauthorized", "invalid_json", "invalid_request", "payload_too_large", "batch_limit_exceeded", "queue_full", "engine_wait_timeout", "service_stopping", "service_unavailable", "internal_error"]},
           "error": {"type": "string", "minLength": 1}
         }
       }

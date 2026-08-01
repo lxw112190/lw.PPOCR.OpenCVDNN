@@ -20,8 +20,7 @@ public:
     OcrEngine& operator=(const OcrEngine&) = delete;
 
     core::PipelineResult Run(const cv::Mat& image);
-    core::RecognitionResult RecognizeBatch(
-        const std::vector<cv::Mat>& images);
+    core::RecognitionResult RecognizeBatch(std::vector<cv::Mat> images);
     void Log(lw_ppocr_log_level level, const std::string& message) const noexcept;
 
 private:
