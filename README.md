@@ -227,6 +227,7 @@ Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相�
 - [兼容矩阵](docs/COMPATIBILITY.md)
 - [v1 契约冻结规则](docs/CONTRACTS.md)
 - [测试策略与本地命令](docs/TESTING.md)
+- [v1.0.0-rc.3 Windows 本机性能报告](docs/performance/v1.0.0-rc.3-windows-local.md)
 - [依赖锁、SBOM 与供应链控制](docs/SUPPLY-CHAIN.md)
 - [安全报告策略](SECURITY.md)
 

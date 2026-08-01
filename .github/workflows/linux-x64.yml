@@ -79,6 +79,7 @@ jobs:
         run: |
           bash -n deploy/linux/*.sh scripts/package_linux.sh
           python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py \
+            scripts/http_benchmark.py \
             scripts/http_overload_test.py \
             scripts/http_invalid_inputs.py scripts/http_contract_test.py \
             scripts/config_contract_test.py \

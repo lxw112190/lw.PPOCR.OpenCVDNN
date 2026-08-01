@@ -200,6 +200,8 @@ install(FILES docs/COMPATIBILITY.md DESTINATION docs)
 install(FILES docs/CONTRACTS.md DESTINATION docs)
 install(FILES docs/TESTING.md DESTINATION docs)
 install(FILES docs/SUPPLY-CHAIN.md DESTINATION docs)
+install(FILES docs/performance/v1.0.0-rc.3-windows-local.md
+    DESTINATION docs/performance)
 install(FILES
     docs/releases/v0.7.0.md
     docs/releases/v1.0.0-rc.1.md
@@ -215,6 +217,7 @@ install(FILES
     scripts/dependency_tools.py
     scripts/generate_sbom.py
     scripts/http_contract_test.py
+    scripts/http_benchmark.py
     scripts/http_invalid_inputs.py
     scripts/http_overload_test.py
     scripts/http_smoke.py

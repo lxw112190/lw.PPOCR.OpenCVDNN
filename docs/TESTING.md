@@ -42,8 +42,12 @@ python3 scripts/ocr_regression.py --package-dir dist/package \
   --cases tests/regression/ppocrv6-tiny.json --port 18786
 python3 scripts/http_invalid_inputs.py --package-dir dist/package --port 18784
 python3 scripts/http_contract_test.py --package-dir dist/package --port 18782
+python3 scripts/http_benchmark.py --package-dir dist/package \
+  --output build/http-benchmark.json --warmup 10 --iterations 100 \
+  --matrix 1:1,1:4,2:2,2:4,4:4
 python3 scripts/http_stress.py --package-dir dist/package \
-  --iterations 5000 --concurrency 2 --port 18788
+  --iterations 5000 --concurrency 2 --port 18788 \
+  --output build/http-stress.json
 ```
 
 RSS growth is a practical leak signal, not a mathematical proof that no leak

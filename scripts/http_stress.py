@@ -161,6 +161,7 @@ def main() -> int:
     parser.add_argument("--iterations", type=int, default=64)
     parser.add_argument("--concurrency", type=int, default=2)
     parser.add_argument("--max-rss-growth-mb", type=float, default=128.0)
+    parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
     if args.iterations < 1 or args.concurrency < 1:
         parser.error("iterations and concurrency must be positive")
@@ -304,7 +305,7 @@ def main() -> int:
             f"limit is {args.max_rss_growth_mb:.2f} MiB")
         assert process.poll() is None
 
-        print(json.dumps({
+        document = {
             "iterations": args.iterations,
             "concurrency": args.concurrency,
             "image_sizes": [name for name, _, _ in images],
@@ -316,7 +317,14 @@ def main() -> int:
             "rss_growth_mb": round(growth / 1048576, 2),
             "rss_growth_limit_mb": args.max_rss_growth_mb,
             "status": "passed",
-        }, ensure_ascii=False, indent=2))
+        }
+        rendered = json.dumps(document, ensure_ascii=False, indent=2)
+        if args.output:
+            output_path = args.output.resolve()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(rendered + "\n", encoding="utf-8")
+            print(f"Created {output_path}")
+        print(rendered)
         return 0
     finally:
         if process is not None:

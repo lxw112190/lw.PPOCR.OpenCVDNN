@@ -197,6 +197,7 @@ Linux and macOS CI save OpenCV only after a successful build and install, while 
 - [Compatibility matrix](docs/COMPATIBILITY.md)
 - [Frozen v1 contracts](docs/CONTRACTS.md)
 - [Testing strategy and local commands](docs/TESTING.md)
+- [v1.0.0-rc.3 Windows local performance report](docs/performance/v1.0.0-rc.3-windows-local.md)
 - [Dependency lock, SBOM, and supply-chain controls](docs/SUPPLY-CHAIN.md)
 - [Security reporting policy](SECURITY.md)
 
