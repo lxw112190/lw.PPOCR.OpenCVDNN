@@ -18,8 +18,8 @@ ARMv8-A。OpenCV 5.0.0、OCR 动态库、HTTP 服务、模型、网页、GCC 运
 ## CI package / CI 产物
 
 ```text
-lw.PPOCR.OpenCVDNN-v1.0.0-rc.1-linux-arm64-uos20.tar.gz
-lw.PPOCR.OpenCVDNN-v1.0.0-rc.1-linux-arm64-uos20.tar.gz.sha256
+lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz
+lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz.sha256
 ```
 
 The workflow validates the native architecture, maximum required glibc symbol
@@ -36,9 +36,9 @@ CI 会验证 AArch64 ELF、最高 GLIBC 符号版本、单元测试、真实 OCR
 ```bash
 uname -m
 getconf GNU_LIBC_VERSION
-sha256sum -c lw.PPOCR.OpenCVDNN-v1.0.0-rc.1-linux-arm64-uos20.tar.gz.sha256
-tar -xzf lw.PPOCR.OpenCVDNN-v1.0.0-rc.1-linux-arm64-uos20.tar.gz
-cd lw.PPOCR.OpenCVDNN-v1.0.0-rc.1-linux-arm64-uos20
+sha256sum -c lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz.sha256
+tar -xzf lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20.tar.gz
+cd lw.PPOCR.OpenCVDNN-v1.0.0-rc.2-linux-arm64-uos20
 chmod +x run-http-service.sh
 ./run-http-service.sh
 ```
@@ -55,11 +55,19 @@ firewall or reverse proxy.
 ## systemd
 
 ```bash
+./install-service.sh --verify-only
 sudo ./install-service.sh
 sudo ./restart-service.sh
 sudo ./stop-service.sh
 sudo ./uninstall-service.sh
 ```
+
+`--verify-only` asks `systemd-analyze` to parse the generated unit without
+installing it. The installer uses the absolute path of the target machine's
+`bash` and writes `WorkingDirectory=` with systemd path escaping but without
+outer quotes, which is verified on openEuler 22.03 SP1/systemd 249. On a start
+failure it prints the installed unit, full service status, and the latest 80
+journal records.
 
 ## Compatibility statement / 兼容性声明
 

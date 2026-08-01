@@ -8,7 +8,7 @@ service, and the browser page.
 
 ### 使用预构建镜像
 
-发布 `v1.0.0-rc.1` 标签后，可直接运行 GitHub Container Registry 候选镜像：
+发布 `v1.0.0-rc.2` 标签后，可直接运行 GitHub Container Registry 候选镜像：
 
 ```bash
 docker run -d \
@@ -16,7 +16,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8787:8787 \
   -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
 ```
 
 访问 <http://127.0.0.1:8787/>。查看状态和日志：
@@ -41,7 +41,7 @@ docker compose logs -f ppocr
 
 ```bash
 docker build --platform linux/amd64 \
-  -t ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1 .
+  -t ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2 .
 docker compose up -d
 ```
 
@@ -84,7 +84,7 @@ API Key 不会写入启动输出或请求日志。启动输出只显示
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `PPOCR_IMAGE` | `ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1` | 镜像名称和标签 |
+| `PPOCR_IMAGE` | `ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2` | 镜像名称和标签 |
 | `PPOCR_PORT` | `8787` | 宿主机映射端口 |
 | `PPOCR_API_KEY` | 空 | 空值表示不启用认证 |
 | `PPOCR_ENGINE_INSTANCES` | `1` | 独立模型实例数量，增加后会显著增加内存 |
@@ -100,7 +100,7 @@ API Key 不会写入启动输出或请求日志。启动输出只显示
 
 ### Prebuilt image
 
-After the `v1.0.0-rc.1` image is published:
+After the `v1.0.0-rc.2` image is published:
 
 ```bash
 docker run -d \
@@ -108,7 +108,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8787:8787 \
   -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
 ```
 
 Open <http://127.0.0.1:8787/>. The container runs as the non-root UID/GID

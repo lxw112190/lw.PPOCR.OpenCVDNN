@@ -6,7 +6,7 @@
 
 当前内置模型为 PP-OCRv6 Tiny Chinese，推理设备为 CPU。项目不依赖 Paddle Runtime、ONNX Runtime、DirectML、OpenVINO 或 TensorRT。
 
-> 当前候选版本：`v1.0.0-rc.1`。C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与日志 Schema v1 均已冻结；RC 阶段只接受 Bug 修复，不再调整公共接口。正式生产部署前请在目标环境验证候选包。
+> 当前候选版本：`v1.0.0-rc.2`。C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与日志 Schema v1 均已冻结；RC 阶段只接受 Bug 修复，不再调整公共接口。正式生产部署前请在目标环境验证候选包。
 
 ## 主要能力
 
@@ -56,12 +56,12 @@ chmod +x run-http-service.sh
 
 ### Docker / Docker Compose
 
-`v1.0.0-rc.1` 提供用于最终验证的 `linux/amd64` 候选容器镜像。标签发布后可直接运行：
+`v1.0.0-rc.2` 提供用于最终验证的 `linux/amd64` 候选容器镜像。标签发布后可直接运行：
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
 ```
 
 使用 Compose：
@@ -98,7 +98,7 @@ sudo ./start-service.sh
 sudo ./uninstall-service.sh
 ```
 
-服务名为 `lw-ppocr-opencvdnn.service`，默认使用执行 `sudo` 的用户运行并随系统启动。可在安装时通过 `LW_PPOCR_SERVICE_USER` 指定账户，例如 `sudo LW_PPOCR_SERVICE_USER=ocr ./install-service.sh`。日志仍写入发布包的 `logs/` 目录。
+服务名为 `lw-ppocr-opencvdnn.service`，默认使用执行 `sudo` 的用户运行并随系统启动。可在安装时通过 `LW_PPOCR_SERVICE_USER` 指定账户，例如 `sudo LW_PPOCR_SERVICE_USER=ocr ./install-service.sh`。日志仍写入发布包的 `logs/` 目录。安装脚本会对工作目录执行 systemd 路径转义，以兼容 openEuler 22.03 SP1/systemd 249。安装前可执行 `./install-service.sh --verify-only`，让 `systemd-analyze` 检查即将安装的 unit，但不修改系统。若安装或启动失败，脚本会自动输出 unit、服务状态和最近 80 条 journal 日志。
 
 完整 OCR 推荐直接上传图片二进制，避免 Base64 大约 33% 的体积膨胀：
 
@@ -221,7 +221,7 @@ Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相�
 
 ## 质量、安全与兼容性文档
 
-- [v1.0.0-rc.1 发布候选说明](docs/releases/v1.0.0-rc.1.md)
+- [v1.0.0-rc.2 发布候选说明](docs/releases/v1.0.0-rc.2.md)
 - [兼容矩阵](docs/COMPATIBILITY.md)
 - [v1 契约冻结规则](docs/CONTRACTS.md)
 - [测试策略与本地命令](docs/TESTING.md)

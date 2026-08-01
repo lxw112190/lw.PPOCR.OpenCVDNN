@@ -6,7 +6,7 @@ A small, cross-platform PP-OCR inference project powered exclusively by **OpenCV
 
 The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the CPU. Paddle Runtime, ONNX Runtime, DirectML, OpenVINO, and TensorRT are not required.
 
-> Current release candidate: `v1.0.0-rc.1`. C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and log Schema v1 are frozen. The RC phase accepts bug fixes only and no longer changes public interfaces. Validate the candidate package on the target environment before production use.
+> Current release candidate: `v1.0.0-rc.2`. C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and log Schema v1 are frozen. The RC phase accepts bug fixes only and no longer changes public interfaces. Validate the candidate package on the target environment before production use.
 
 ## Features
 
@@ -54,12 +54,12 @@ Open <http://127.0.0.1:8787/>. Startup output always shows the author, QQ contac
 
 ### Docker / Docker Compose
 
-`v1.0.0-rc.1` provides a release-candidate `linux/amd64` image for final validation. After the tag is published:
+`v1.0.0-rc.2` provides a release-candidate `linux/amd64` image for final validation. After the tag is published:
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.2
 ```
 
 With Compose:
@@ -96,7 +96,7 @@ sudo ./start-service.sh
 sudo ./uninstall-service.sh
 ```
 
-The service name is `lw-ppocr-opencvdnn.service`. By default it runs as the user who invoked `sudo` and starts at boot. Override the account during installation with `sudo LW_PPOCR_SERVICE_USER=ocr ./install-service.sh`. Logs remain under the package's `logs/` directory.
+The service name is `lw-ppocr-opencvdnn.service`. By default it runs as the user who invoked `sudo` and starts at boot. Override the account during installation with `sudo LW_PPOCR_SERVICE_USER=ocr ./install-service.sh`. Logs remain under the package's `logs/` directory. The installer applies systemd path escaping to the working directory for compatibility with openEuler 22.03 SP1/systemd 249. Run `./install-service.sh --verify-only` first to have `systemd-analyze` validate the unit without changing the system. If installation or startup fails, the script prints the unit, service status, and the latest 80 journal records automatically.
 
 For full OCR, upload the encoded image bytes directly to avoid Base64's roughly
 33% size increase:
@@ -191,7 +191,7 @@ Linux and macOS CI save OpenCV only after a successful build and install, while 
 
 ## Quality, security, and compatibility documents
 
-- [v1.0.0-rc.1 release candidate notes](docs/releases/v1.0.0-rc.1.md)
+- [v1.0.0-rc.2 release candidate notes](docs/releases/v1.0.0-rc.2.md)
 - [Compatibility matrix](docs/COMPATIBILITY.md)
 - [Frozen v1 contracts](docs/CONTRACTS.md)
 - [Testing strategy and local commands](docs/TESTING.md)
