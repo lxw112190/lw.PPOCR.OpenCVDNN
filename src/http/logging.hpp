@@ -28,7 +28,7 @@ struct LoggingConfig {
     bool request_start_enabled = true;
     bool access_file_enabled = true;
     std::string access_file_path = "logs/access.log";
-    std::string access_format = "text";
+    std::string access_format = "jsonl";
     size_t flush_interval_seconds = 1;
     std::vector<std::string> trusted_proxies;
     size_t max_file_size = 10u * 1024u * 1024u;

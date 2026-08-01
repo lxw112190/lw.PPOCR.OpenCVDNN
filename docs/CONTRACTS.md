@@ -32,9 +32,10 @@ used as a programmatic contract.
 
 The configuration root contains `schema_version: 1`. Unknown fields and
 unsupported schema versions are rejected at startup so misspellings do not
-silently weaken production controls. `access_format: "text"` is the default;
-set it to `jsonl` when the frozen machine-readable access-log schema is needed.
+silently weaken production controls. `access_format: "jsonl"` is the default
+and follows the frozen machine-readable access-log Schema v1; use `text` only
+when a human-readable access log is preferred.
 
 配置根节点包含 `schema_version: 1`。服务启动时会拒绝未知字段和不支持的版本，避免
-配置拼写错误被静默忽略。`access_format: "text"` 是默认值；需要使用冻结的机器可读
-日志 Schema 时，应显式设置为 `jsonl`。
+配置拼写错误被静默忽略。`access_format: "jsonl"` 是默认值，并遵循冻结的机器可读
+访问日志 Schema v1；仅在需要人工阅读的访问日志时改为 `text`。

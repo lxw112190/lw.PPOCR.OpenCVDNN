@@ -163,7 +163,7 @@ X-API-Key: replace-with-a-long-random-secret
   "request_start_enabled": true,
   "access_file_enabled": true,
   "access_file_path": "logs/access.log",
-  "access_format": "text",
+  "access_format": "jsonl",
   "flush_interval_seconds": 1,
   "trusted_proxies": [],
   "max_file_size_mb": 10,
@@ -171,7 +171,7 @@ X-API-Key: replace-with-a-long-random-secret
 }
 ```
 
-- `runtime.log` 记录启动、模型加载、警告、异常与崩溃线索；`access.log` 默认使用与运行日志一致的带时间文本格式，记录请求 ID、状态、输入/输出大小、图片尺寸、分阶段耗时和错误码；需要日志采集程序解析时可改为 `jsonl`。
+- `runtime.log` 记录启动、模型加载、警告、异常与崩溃线索；`access.log` 默认使用遵循访问日志 Schema v1 的 `jsonl`，记录请求 ID、状态、输入/输出大小、图片尺寸、分阶段耗时和错误码；偏重人工阅读时可改为带时间前缀的 `text`。
 - `enabled=false` 会关闭全部 spdlog 日志；`request_enabled=false` 仅关闭逐请求访问日志与 `request_started`。
 - `request_start_enabled=true` 会在推理前刷新一条运行日志，便于定位“处理哪一个请求时退出”；访问日志按 `flush_interval_seconds` 周期刷新，两类文件独立按大小轮转。
 - 所有 OCR 响应都会在 JSON 和 `X-Request-ID` 响应头返回相同请求 ID。默认忽略 `X-Forwarded-For`；只有直接代理 IP 明确列入 `trusted_proxies` 后才会采用其转发地址。

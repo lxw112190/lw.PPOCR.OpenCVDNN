@@ -44,7 +44,7 @@ def main() -> int:
     parser.add_argument("--package-dir", type=pathlib.Path, required=True)
     parser.add_argument("--port", type=int, default=18785)
     parser.add_argument(
-        "--access-format", choices=("jsonl", "text"), default="text")
+        "--access-format", choices=("jsonl", "text"), default="jsonl")
     args = parser.parse_args()
 
     package = args.package_dir.resolve()

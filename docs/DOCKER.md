@@ -145,7 +145,7 @@ The same variables can be applied directly to the native HTTP executable:
 | `LW_PPOCR_REQUEST_LOGGING_ENABLED` | OCR access-record master switch |
 | `LW_PPOCR_REQUEST_START_LOGGING_ENABLED` | Pre-inference runtime breadcrumb switch |
 | `LW_PPOCR_ACCESS_FILE_LOGGING_ENABLED`, `LW_PPOCR_ACCESS_LOG_FILE` | Access rotating-file switch and path |
-| `LW_PPOCR_ACCESS_LOG_FORMAT` | Access format: `text` (default) or `jsonl` |
+| `LW_PPOCR_ACCESS_LOG_FORMAT` | Access format: `jsonl` (default) or `text` |
 | `LW_PPOCR_LOG_FLUSH_INTERVAL_SECONDS` | Periodic flush interval, 1–60 seconds |
 | `LW_PPOCR_TRUSTED_PROXIES` | Comma-separated exact proxy IPs trusted for `X-Forwarded-For` |
 

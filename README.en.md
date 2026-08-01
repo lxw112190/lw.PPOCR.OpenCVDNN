@@ -143,7 +143,7 @@ The service never logs API Keys, Base64 image data, request bodies, or recognize
 
 ### Logging
 
-v0.4.0 separates human-readable runtime diagnostics in `logs/runtime.log` from OCR access records in `logs/access.log`. Access logging defaults to the same timestamped text style as the runtime log; set `access_format` to `jsonl` when structured collection is preferred. Access records include the request ID, status, input/output sizes, image dimensions, stage timings, and stable error codes. Every OCR response returns the same ID in its JSON body and `X-Request-ID` header.
+v0.4.0 separates human-readable runtime diagnostics in `logs/runtime.log` from OCR access records in `logs/access.log`. Access logging defaults to `jsonl`, matching the frozen machine-readable access-log Schema v1; set `access_format` to `text` when the timestamped human-readable style is preferred. Access records include the request ID, status, input/output sizes, image dimensions, stage timings, and stable error codes. Every OCR response returns the same ID in its JSON body and `X-Request-ID` header.
 
 Set `enabled=false` to disable spdlog entirely, or `request_enabled=false` to keep runtime logs while disabling access records and request-start breadcrumbs. With `request_start_enabled=true`, the service explicitly flushes a `request_started` record before inference; access records are periodically flushed according to `flush_interval_seconds`. `X-Forwarded-For` is ignored unless the immediate proxy IP is explicitly listed in `trusted_proxies`. Caught failures, `std::terminate`, and Windows unhandled-exception code/address are recorded on a best-effort basis.
 
