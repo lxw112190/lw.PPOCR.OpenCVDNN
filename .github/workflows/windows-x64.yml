@@ -62,7 +62,7 @@ jobs:
 
       - name: Restore OpenCV cache
         id: opencv-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/opencv
           key: opencv-5.0.0-windows-x64-prebuilt-v2-9c6c1fce
@@ -86,7 +86,7 @@ jobs:
 
       - name: Save OpenCV cache
         if: steps.opencv-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/opencv
           key: ${{ steps.opencv-cache.outputs.cache-primary-key }}

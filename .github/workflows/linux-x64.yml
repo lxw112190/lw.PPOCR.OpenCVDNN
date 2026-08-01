@@ -36,7 +36,7 @@ jobs:
 
       - name: Restore minimal OpenCV cache
         id: opencv-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: .ci/opencv-5.0.0
           key: opencv-5.0.0-ubuntu-20.04-x64-minimal-v4-b0528f5a
@@ -70,7 +70,7 @@ jobs:
 
       - name: Save minimal OpenCV cache
         if: steps.opencv-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: .ci/opencv-5.0.0
           key: ${{ steps.opencv-cache.outputs.cache-primary-key }}
