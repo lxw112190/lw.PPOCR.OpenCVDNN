@@ -9,12 +9,12 @@ v0.6.0 freezes three public machine-readable contracts:
 
 Before the first stable 1.0 release, the v1 candidate was intentionally
 refrozen to add bounded queues, engine wait timeouts, cumulative batch limits,
-and the corresponding `413`, `429`, and `503` responses. The lock records this
-reviewed pre-1.0 baseline; after 1.0.0, incompatible changes require v2.
+and the corresponding `413`, `429`, and `503` responses. Version 1.0.0 formally
+freezes that reviewed baseline; incompatible changes require v2.
 
 在首个正式 1.0 发布前，项目有意重新冻结 v1 候选契约，加入有界队列、引擎等待
-超时、批量累计限制，以及相应的 `413`、`429`、`503` 响应。lock 文件记录的是这次
-经过审查的 1.0 前基线；正式发布 1.0.0 后，不兼容修改必须升级到 v2。
+超时、批量累计限制，以及相应的 `413`、`429`、`503` 响应。`v1.0.0` 正式冻结这套
+经过审查的基线；不兼容修改必须升级到 v2。
 
 v0.6.0 冻结上述 HTTP API、服务配置和 JSONL 访问日志三套 v1 契约。
 

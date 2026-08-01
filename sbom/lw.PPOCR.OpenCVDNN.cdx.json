@@ -5,10 +5,10 @@
   "metadata": {
     "component": {
       "type": "application",
-      "bom-ref": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@1.0.0-rc.3",
+      "bom-ref": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@1.0.0",
       "name": "lw.PPOCR.OpenCVDNN",
-      "version": "1.0.0-rc.3",
-      "purl": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@1.0.0-rc.3"
+      "version": "1.0.0",
+      "purl": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@1.0.0"
     },
     "properties": [
       {
@@ -217,7 +217,7 @@
   ],
   "dependencies": [
     {
-      "ref": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@1.0.0-rc.3",
+      "ref": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@1.0.0",
       "dependsOn": [
         "pkg:github/yhirose/cpp-httplib@0.49.0",
         "pkg:github/nlohmann/json@3.12.0",

@@ -1,6 +1,6 @@
 {
   "lock_version": 1,
-  "policy": "Reviewed pre-1.0 v1 baseline for rc.3. Immutable after v1.0.0; post-1.0 breaking changes require v2.",
+  "policy": "Frozen v1 baseline published with v1.0.0. Breaking changes require a versioned v2 contract.",
   "files": {
     "access-log-v1.schema.json": "ded2b983df0266ede4e35b2bbae5992b6172025a67b52e81e3655ef1c5b31faf",
     "http-api-v1.openapi.json": "9b7ef23b87b0985849e79147df06e218c08628f849336980b06de66ae3566b0f",

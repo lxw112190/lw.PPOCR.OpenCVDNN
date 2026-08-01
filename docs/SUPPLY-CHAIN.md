@@ -23,7 +23,7 @@ Validate before committing a legitimate dependency update:
 
 ```bash
 python3 scripts/validate_dependencies.py
-python3 scripts/generate_sbom.py --version 1.0.0-rc.3 \
+python3 scripts/generate_sbom.py --version 1.0.0 \
   --output sbom/lw.PPOCR.OpenCVDNN.cdx.json
 ```
 

@@ -207,6 +207,7 @@ install(FILES
     docs/releases/v1.0.0-rc.1.md
     docs/releases/v1.0.0-rc.2.md
     docs/releases/v1.0.0-rc.3.md
+    docs/releases/v1.0.0.md
     DESTINATION docs/releases)
 install(FILES tests/abi/exports-v1.txt DESTINATION docs)
 install(DIRECTORY tests/fixtures DESTINATION tests)
