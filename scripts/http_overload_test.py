@@ -51,6 +51,108 @@ def request(url: str, data=None, content_type=None, timeout=120):
         return 0, {}, {"transport_error": str(error)}
 
 
+def wait_ready(process, base_url: str) -> None:
+    for _ in range(160):
+        if process.poll() is not None:
+            break
+        status, _, health = request(base_url + "/health", timeout=2)
+        if status == 200 and health.get("ok") is True:
+            return
+        time.sleep(0.25)
+    if process.poll() is not None:
+        raise RuntimeError("overload test service exited before readiness")
+    raise RuntimeError("overload test service readiness timed out")
+
+
+def send_burst(endpoint: str, sample: bytes, request_count: int):
+    barrier = threading.Barrier(request_count)
+
+    def send_one():
+        barrier.wait(timeout=10)
+        return request(endpoint, sample, "image/bmp")
+
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=request_count) as executor:
+        futures = [executor.submit(send_one) for _ in range(request_count)]
+        return [future.result() for future in futures]
+
+
+def stop_service(process):
+    process.terminate()
+    try:
+        process.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+    return process.stdout.read() if process.stdout else ""
+
+
+def run_phase(package: pathlib.Path, executable: pathlib.Path,
+              base_config: dict, port: int, phase: str, settings: dict,
+              sample: bytes, request_count: int, required_code: str):
+    config = json.loads(json.dumps(base_config))
+    config.update({
+        "listen_host": "127.0.0.1",
+        "port": port,
+        "api_key": "",
+        "engine_instances": 1,
+    })
+    config.update(settings)
+    config["logging"]["enabled"] = False
+    config_path = package / (
+        f".http-overload-{phase}-{os.getpid()}.json")
+    config_path.write_text(json.dumps(
+        config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    process = None
+    output = ""
+    failed = True
+    try:
+        process = subprocess.Popen(
+            [str(executable), "--config", str(config_path)], cwd=package,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            encoding="utf-8", errors="replace")
+        base_url = f"http://127.0.0.1:{port}"
+        wait_ready(process, base_url)
+        endpoint = base_url + "/api/ocr"
+        observed = []
+        for _ in range(3):
+            observed.extend(send_burst(endpoint, sample, request_count))
+            codes = {item[2].get("error_code") for item in observed}
+            if required_code in codes:
+                break
+
+        codes = {item[2].get("error_code") for item in observed}
+        assert required_code in codes, (
+            f"{phase}: {required_code} was not observed: {observed}")
+        status, _, recovered = request(
+            endpoint, sample, "image/bmp", timeout=120)
+        assert status == 200 and recovered.get("ok") is True
+        assert process.poll() is None
+        failed = False
+        return observed
+    finally:
+        if process is not None:
+            output = stop_service(process)
+            if output and (failed or process.returncode not in (0, -15, 1)):
+                print(f"--- {phase} service output ---")
+                print(output)
+        try:
+            config_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def validate_overload_responses(observed, status: int, code: str) -> None:
+    matching = [item for item in observed if item[2].get("error_code") == code]
+    assert matching, f"{code} response was not observed: {observed}"
+    for actual_status, headers, document in matching:
+        assert actual_status == status
+        assert document.get("ok") is False
+        assert headers.get("X-Request-ID") == document.get("request_id")
+        assert headers.get("Retry-After") == "1"
+
+
 def main() -> int:
     configure_utf8_output()
     parser = argparse.ArgumentParser()
@@ -61,106 +163,39 @@ def main() -> int:
     package = args.package_dir.resolve()
     executable = package / ("lw-ppocr-http-service.exe"
         if platform.system() == "Windows" else "lw-ppocr-http-service")
-    config = json.loads((package / "http-service.json").read_text(
+    base_config = json.loads((package / "http-service.json").read_text(
         encoding="utf-8"))
-    config.update({
-        "listen_host": "127.0.0.1",
-        "port": args.port,
-        "api_key": "",
-        "engine_instances": 1,
-        "worker_threads": 4,
-        "max_queued_requests": 1,
-        "engine_wait_timeout_ms": 100,
-    })
-    config["logging"]["enabled"] = False
-    config_path = package / f".http-overload-{os.getpid()}.json"
-    config_path.write_text(json.dumps(
-        config, ensure_ascii=False, indent=2), encoding="utf-8")
+    sample = make_bmp(2400, 1800)
 
-    process = None
-    output = ""
-    try:
-        process = subprocess.Popen(
-            [str(executable), "--config", str(config_path)], cwd=package,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            encoding="utf-8", errors="replace")
-        base_url = f"http://127.0.0.1:{args.port}"
-        for _ in range(160):
-            if process.poll() is not None:
-                break
-            try:
-                status, _, health = request(base_url + "/health", timeout=2)
-                if status == 200 and health.get("ok") is True:
-                    break
-            except Exception:
-                pass
-            time.sleep(0.25)
-        else:
-            raise RuntimeError("overload test service readiness timed out")
-        if process.poll() is not None:
-            raise RuntimeError("overload test service exited before readiness")
+    timeout_observed = run_phase(
+        package, executable, base_config, args.port, "timeout", {
+            "worker_threads": 4,
+            "max_queued_requests": 8,
+            "engine_wait_timeout_ms": 10,
+        }, sample, 4, "engine_wait_timeout")
+    validate_overload_responses(
+        timeout_observed, 503, "engine_wait_timeout")
 
-        sample = make_bmp(2400, 1800)
-        endpoint = base_url + "/api/ocr"
-        observed = []
-        for _ in range(6):
-            barrier = threading.Barrier(8)
+    queue_observed = run_phase(
+        package, executable, base_config, args.port + 1, "queue-full", {
+            "worker_threads": 8,
+            "max_queued_requests": 1,
+            "engine_wait_timeout_ms": 5000,
+        }, sample, 8, "queue_full")
+    validate_overload_responses(queue_observed, 429, "queue_full")
 
-            def send_one():
-                barrier.wait(timeout=10)
-                return request(endpoint, sample, "image/bmp")
-
-            with concurrent.futures.ThreadPoolExecutor(
-                    max_workers=8) as executor:
-                futures = [executor.submit(send_one) for _ in range(8)]
-                observed.extend(future.result() for future in futures)
-            codes = {item[2].get("error_code") for item in observed}
-            if "queue_full" in codes and "engine_wait_timeout" in codes:
-                break
-
-        overload = [item for item in observed if item[0] in (429, 503)]
-        assert overload, f"no overload response observed: {observed}"
-        codes = {item[2].get("error_code") for item in overload}
-        assert "queue_full" in codes, f"queue_full was not observed: {observed}"
-        assert "engine_wait_timeout" in codes, (
-            f"engine_wait_timeout was not observed: {observed}")
-        for status, headers, document in overload:
-            assert document.get("ok") is False
-            assert headers.get("X-Request-ID") == document.get("request_id")
-            assert headers.get("Retry-After") == "1"
-            assert (status, document.get("error_code")) in {
-                (429, "queue_full"), (503, "engine_wait_timeout")}
-
-        status, _, recovered = request(
-            endpoint, sample, "image/bmp", timeout=120)
-        assert status == 200 and recovered.get("ok") is True
-        assert process.poll() is None
-        print(json.dumps({
-            "requests": len(observed),
-            "queue_full": sum(item[0] == 429 for item in observed),
-            "engine_wait_timeout": sum(item[0] == 503 for item in observed),
-            "transport_rejections": sum(item[0] == 0 for item in observed),
-            "post_overload_recovery": "passed",
-            "status": "passed",
-        }, ensure_ascii=False, indent=2))
-        return 0
-    finally:
-        if process is not None:
-            process.terminate()
-            try:
-                process.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
-            if process.stdout:
-                output = process.stdout.read()
-            if output and process.returncode not in (0, -15, 1):
-                print("--- service output ---")
-                print(output)
-        try:
-            config_path.unlink()
-        except FileNotFoundError:
-            pass
+    observed = timeout_observed + queue_observed
+    print(json.dumps({
+        "requests": len(observed),
+        "queue_full": sum(item[0] == 429 for item in observed),
+        "engine_wait_timeout": sum(item[0] == 503 for item in observed),
+        "transport_rejections": sum(item[0] == 0 for item in observed),
+        "timeout_phase_recovery": "passed",
+        "queue_phase_recovery": "passed",
+        "post_overload_recovery": "passed",
+        "status": "passed",
+    }, ensure_ascii=False, indent=2))
+    return 0
 
 
 if __name__ == "__main__":
