@@ -38,7 +38,12 @@ gcc_runtime="$(gcc -print-file-name=libgcc_s.so.1)"
 [[ -f "$gcc_runtime" ]] || { echo "libgcc_s.so.1 not found" >&2; exit 1; }
 cp -L "$cxx_runtime" "$package_dir/libstdc++.so.6"
 cp -L "$gcc_runtime" "$package_dir/libgcc_s.so.1"
-opencv_version_header="$opencv_prefix/include/opencv2/core/version.hpp"
+opencv_version_header="$(find "$opencv_prefix/include" -type f \
+  -path '*/opencv2/core/version.hpp' -print -quit)"
+if [[ -z "$opencv_version_header" ]]; then
+  echo "OpenCV version header was not found under: $opencv_prefix/include" >&2
+  exit 1
+fi
 opencv_major="$(awk '$2 == "CV_VERSION_MAJOR" { print $3; exit }' \
   "$opencv_version_header")"
 opencv_minor="$(awk '$2 == "CV_VERSION_MINOR" { print $3; exit }' \
