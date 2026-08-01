@@ -38,8 +38,8 @@ elseif(UNIX)
 endif()
 
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
-if(OpenCV_VERSION VERSION_LESS 4.5)
-    message(FATAL_ERROR "OpenCV 4.5 or newer is required")
+if(OpenCV_VERSION VERSION_LESS 5.0)
+    message(FATAL_ERROR "OpenCV 5.0 or newer is required")
 endif()
 find_package(Threads REQUIRED)
 

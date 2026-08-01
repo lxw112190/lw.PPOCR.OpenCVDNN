@@ -204,9 +204,9 @@ dotnet run --project examples/csharp -c Release -- `
 
 ## 从源码构建
 
-要求：CMake 3.24+、C++17 编译器、OpenCV 4.5+（`core`、`imgproc`、`imgcodecs`、`dnn`）。
+要求：CMake 3.24+、C++17 编译器、OpenCV 5.0+（`core`、`imgproc`、`imgcodecs`、`dnn` 及其依赖模块）。
 
-项目保持 C++17：官方 CI 使用的 OpenCV 5 本身要求 C++17，项目也使用了 `std::filesystem` 等 C++17 能力。对外接口是稳定 C ABI，调用方无需采用 C++17。GCC 8 的 `std::filesystem` 会自动补充链接 `stdc++fs`，可覆盖统信 UOS 20 / Debian 10 时代的工具链。若必须支持只提供 C++11 工具链的旧系统，建议单独维护 OpenCV 4.x + C++11 的兼容分支。
+项目只支持 OpenCV 5，不兼容 OpenCV 4.x。OpenCV 5 本身要求 C++17，项目也使用了 `std::filesystem` 等 C++17 能力。对外接口是稳定 C ABI，调用方无需采用 C++17。GCC 8 的 `std::filesystem` 会自动补充链接 `stdc++fs`，可覆盖统信 UOS 20 / Debian 10 时代的工具链。若必须支持 OpenCV 4.x 或只提供 C++11 工具链的旧系统，应单独维护兼容项目。
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=/path/to/opencv

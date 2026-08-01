@@ -18,11 +18,12 @@ claim compatibility with every newer operating-system combination.
 | Docker `linux/amd64` | x86-64 | Ubuntu 20.04 runtime image, non-root user | 5.0.0 | CI/Compose verified |
 
 The project requires a C++17 compiler when building from source and supports
-OpenCV 4.5 or newer at source level. Official downloadable packages use the
-fixed OpenCV 5.0.0 dependency set recorded in `dependencies.lock.json`.
+OpenCV 5.0 or newer at source level; OpenCV 4.x is intentionally unsupported.
+Official downloadable packages use the fixed OpenCV 5.0.0 dependency set
+recorded in `dependencies.lock.json`.
 
-源码构建要求支持 C++17，并在源码层面接受 OpenCV 4.5 及以上版本。正式下载包固定
-使用 `dependencies.lock.json` 记录的 OpenCV 5.0.0 依赖组合。
+源码构建要求支持 C++17 和 OpenCV 5.0 及以上版本，明确不支持 OpenCV 4.x。正式
+下载包固定使用 `dependencies.lock.json` 记录的 OpenCV 5.0.0 依赖组合。
 
 Linux packages bundle OpenCV, `libstdc++.so.6`, and `libgcc_s.so.1`, but do not
 bundle glibc or the ELF loader. The target machine must use the same CPU

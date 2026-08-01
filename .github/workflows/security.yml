@@ -19,6 +19,8 @@ concurrency:
 
 env:
   PACKAGE_VERSION: 0.7.0
+  OPENCV_VERSION: 5.0.0
+  OPENCV_SOURCE_SHA256: b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
 
 jobs:
   supply-chain:
@@ -68,7 +70,52 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential libopencv-dev ninja-build
+            build-essential ca-certificates curl libjpeg-dev libpng-dev \
+            libtiff-dev pkg-config python3-pip tar zlib1g-dev
+          python3 -m pip install --user cmake==3.31.6 ninja==1.11.1.4
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Restore minimal OpenCV 5 cache
+        id: opencv-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .ci/opencv-5.0.0
+          key: opencv-5.0.0-ubuntu-22.04-x64-minimal-v1-b0528f5a
+
+      - name: Build minimal OpenCV 5
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .ci /tmp/opencv-source /tmp/opencv-build
+          curl --fail --location --retry 5 --retry-delay 5 \
+            --retry-connrefused \
+            "https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz" \
+            --output /tmp/opencv.tar.gz
+          echo "${OPENCV_SOURCE_SHA256}  /tmp/opencv.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/opencv.tar.gz --strip-components=1 \
+            -C /tmp/opencv-source
+          cmake -S /tmp/opencv-source -B /tmp/opencv-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/.ci/opencv-5.0.0" \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DBUILD_LIST=core,imgproc,imgcodecs,dnn \
+            -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF -DBUILD_JAVA=OFF \
+            -DBUILD_opencv_apps=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_TESTS=OFF \
+            -DBUILD_JPEG=ON -DBUILD_PNG=ON -DBUILD_PROTOBUF=ON \
+            -DBUILD_TIFF=ON -DBUILD_ZLIB=ON \
+            -DWITH_EIGEN=OFF -DWITH_FFMPEG=OFF \
+            -DWITH_GDAL=OFF -DWITH_GSTREAMER=OFF -DWITH_GTK=OFF \
+            -DWITH_IPP=OFF -DWITH_ITT=OFF -DWITH_JASPER=OFF \
+            -DWITH_LAPACK=OFF -DWITH_OPENCL=OFF -DWITH_OPENEXR=OFF \
+            -DWITH_QT=OFF -DWITH_TBB=OFF -DWITH_WEBP=OFF
+          cmake --build /tmp/opencv-build --parallel 2
+          cmake --install /tmp/opencv-build
+
+      - name: Save minimal OpenCV 5 cache
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .ci/opencv-5.0.0
+          key: ${{ steps.opencv-cache.outputs.cache-primary-key }}
 
       - uses: github/codeql-action/init@v4
         with:
@@ -78,8 +125,12 @@ jobs:
 
       - name: Build analyzed targets
         run: |
+          config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0" \
+            -name OpenCVConfig.cmake -print -quit)"
+          test -n "$config"
           cmake -S . -B build/codeql -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DOpenCV_DIR="$(dirname "$config")"
           cmake --build build/codeql --parallel 2
 
       - uses: github/codeql-action/analyze@v4

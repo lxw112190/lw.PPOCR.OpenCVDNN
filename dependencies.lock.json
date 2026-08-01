@@ -75,7 +75,7 @@
       "purl": "pkg:generic/clipper@6.4.2",
       "source_url": "http://www.angusj.com/delphi/clipper.php",
       "paths": ["third_party/clipper"],
-      "tree_sha256": "44974a3db57967664604d79930dd168abbcb3705b4a55c29a5e373429968cdac",
+      "tree_sha256": "fbc90e00eec2fc94fb1479c0c4aaa847c349d6dc361b822bd8c2269b5d1928c7",
       "license_file": "licenses/clipper-BSL-1.0.txt",
       "version_markers": [
         {"file": "third_party/clipper/clipper.h", "contains": "#define CLIPPER_VERSION \"6.4.2\""}

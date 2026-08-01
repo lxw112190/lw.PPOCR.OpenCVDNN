@@ -174,9 +174,9 @@ dotnet run --project examples/csharp -c Release -- `
 
 ## Build from source
 
-Requirements: CMake 3.24+, a C++17 compiler, and OpenCV 4.5+ with `core`, `imgproc`, `imgcodecs`, and `dnn`.
+Requirements: CMake 3.24+, a C++17 compiler, and OpenCV 5.0+ with `core`, `imgproc`, `imgcodecs`, `dnn`, and their dependency modules.
 
-The project intentionally stays on C++17: OpenCV 5, used by the official CI builds, requires C++17, and the project also uses C++17 facilities such as `std::filesystem`. Consumers call a stable C ABI and do not need to use C++17 themselves. GCC 8 builds automatically link `stdc++fs` for UOS 20 / Debian 10-era toolchains. For legacy systems limited to a C++11 toolchain, maintain a separate OpenCV 4.x + C++11 compatibility branch.
+The project supports OpenCV 5 only and is not compatible with OpenCV 4.x. OpenCV 5 requires C++17, and the project also uses C++17 facilities such as `std::filesystem`. Consumers call a stable C ABI and do not need to use C++17 themselves. GCC 8 builds automatically link `stdc++fs` for UOS 20 / Debian 10-era toolchains. Maintain a separate compatibility project for OpenCV 4.x or legacy systems limited to a C++11 toolchain.
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=/path/to/opencv

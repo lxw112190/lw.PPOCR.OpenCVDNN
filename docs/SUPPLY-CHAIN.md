@@ -7,14 +7,17 @@ v0.7.0 introduces four complementary controls:
    and the expected OpenCV release commit, source archive hash, and Windows
    archive hash.
 2. `scripts/validate_dependencies.py` detects an unreviewed file, content,
-   version-marker, or license change.
+   version-marker, or license change. UTF-8 text is canonicalized to LF before
+   hashing for stable results across Windows, Linux, and macOS; binary files
+   are hashed byte-for-byte.
 3. `sbom/lw.PPOCR.OpenCVDNN.cdx.json` is a deterministic CycloneDX 1.6 SBOM and
    is included in release packages and uploaded as a CI artifact.
 4. GitHub Actions runs CodeQL C/C++, dependency review on pull requests, and
-   Dependabot checks for workflow-action updates.
+   scheduled supply-chain verification.
 
 v0.7.0 使用四类互补控制：锁定依赖与模型哈希、验证任何未审查变化、生成并分发
-CycloneDX 1.6 SBOM，以及执行 CodeQL、PR 依赖审查和 Actions 更新检查。
+CycloneDX 1.6 SBOM，以及执行 CodeQL、PR 依赖审查和定时供应链验证。UTF-8 文本
+在哈希前统一为 LF，保证 Windows、Linux 和 macOS 得到相同摘要；二进制文件仍逐字节校验。
 
 Validate before committing a legitimate dependency update:
 
