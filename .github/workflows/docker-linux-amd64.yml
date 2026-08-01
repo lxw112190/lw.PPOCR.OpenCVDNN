@@ -109,7 +109,11 @@ jobs:
           assert result['ok'] is True
           assert result['backend'] == 'opencv-dnn'
           assert result['result'] and result['result'][0]['text']
-          assert len(result['result'][0]['box']) == 4
+          first = result['result'][0]
+          for index in range(1, 5):
+              assert isinstance(first[f'x{index}'], (int, float))
+              assert isinstance(first[f'y{index}'], (int, float))
+          assert 'box' not in first
           PY
 
           test "$(docker compose -f docker-compose.yml exec -T ppocr id -u)" = "10001"
