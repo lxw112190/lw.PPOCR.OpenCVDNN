@@ -497,7 +497,8 @@ ServiceConfig LoadConfig(const fs::path& path) {
     if (!document.contains("max_batch_decoded_bytes") &&
         std::getenv("LW_PPOCR_MAX_BATCH_DECODED_BYTES") == nullptr) {
         config.max_batch_decoded_bytes = (std::max)(
-            config.max_batch_decoded_bytes, config.max_image_pixels * 3ull);
+            config.max_batch_decoded_bytes,
+            config.max_image_pixels * uint64_t{3});
     }
 
     if (config.logging.trusted_proxies.size() > 64) {
