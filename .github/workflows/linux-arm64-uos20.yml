@@ -19,7 +19,7 @@ env:
   OPENCV_VERSION: 5.0.0
   OPENCV_SOURCE_SHA256: b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
   CMAKE_VERSION: 3.31.6
-  PACKAGE_VERSION: 0.7.0
+  PACKAGE_VERSION: 1.0.0-rc.1
   PACKAGE_PLATFORM: arm64-uos20
 
 jobs:
@@ -121,11 +121,12 @@ jobs:
             scripts/ocr_regression.py scripts/logging_smoke.py scripts/json_schema.py \
             scripts/check_abi.py scripts/validate_contracts.py \
             scripts/dependency_tools.py scripts/validate_dependencies.py \
-            scripts/validate_model_manifest.py
+            scripts/validate_model_manifest.py scripts/validate_release_version.py
           python3 scripts/validate_model_manifest.py \
             --manifest models/ppocrv6-tiny/model.json --require-sha256
           python3 scripts/validate_contracts.py
           python3 scripts/validate_dependencies.py
+          python3 scripts/validate_release_version.py
           config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0-debian10-arm64" \
             -name OpenCVConfig.cmake -print -quit)"
           test -n "$config"
@@ -150,9 +151,11 @@ jobs:
             build/ci-arm64-uos20 .ci/opencv-5.0.0-debian10-arm64 \
             dist "$PACKAGE_VERSION" "$PACKAGE_PLATFORM"
           package="dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-${PACKAGE_PLATFORM}"
+          test -f "$package/RELEASE_VERSION"
           test -f "$package/dependencies.lock.json"
           test -f "$package/sbom/lw.PPOCR.OpenCVDNN.cdx.json"
           test -f "$package/schemas/http-api-v1.openapi.json"
+          test -f "$package/docs/releases/v${PACKAGE_VERSION}.md"
           for script in run-http-service.sh install-service.sh uninstall-service.sh \
                         start-service.sh stop-service.sh restart-service.sh; do
             test -x "$package/$script"

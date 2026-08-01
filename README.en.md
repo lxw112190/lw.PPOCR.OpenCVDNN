@@ -6,7 +6,7 @@ A small, cross-platform PP-OCR inference project powered exclusively by **OpenCV
 
 The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the CPU. Paddle Runtime, ONNX Runtime, DirectML, OpenVINO, and TensorRT are not required.
 
-> Current development version: `v0.7.0`. C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and log Schema v1 are frozen; this release completes the correctness, security, and supply-chain gates.
+> Current release candidate: `v1.0.0-rc.1`. C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and log Schema v1 are frozen. The RC phase accepts bug fixes only and no longer changes public interfaces. Validate the candidate package on the target environment before production use.
 
 ## Features
 
@@ -21,7 +21,7 @@ The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the C
 - Docker and Docker Compose with a non-root Linux x64 image, health checks, persistent logs, and GHCR publishing.
 - Correctness and robustness gates for fixed images, text order, orientation, confidence, boxes, batch order, malformed-input recovery, ASan/UBSan, and long-run memory growth.
 - Automated compatibility checks for C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and JSONL log Schema v1.
-- Supply-chain controls with dependency/model hashes, a CycloneDX 1.6 SBOM, CodeQL, pull-request dependency review, and Dependabot.
+- Supply-chain controls with dependency/model hashes, a CycloneDX 1.6 SBOM, CodeQL, pull-request dependency review, and scheduled verification. Automated Dependabot update PRs are disabled; dependency upgrades are reviewed manually.
 - Windows x64, Linux x64, Linux ARM64 (UnionTech UOS 20 compatibility baseline), and macOS ARM64 CI, with platform-neutral inference code.
 
 ## HTTP quick start
@@ -54,12 +54,12 @@ Open <http://127.0.0.1:8787/>. Startup output always shows the author, QQ contac
 
 ### Docker / Docker Compose
 
-`v0.7.0` provides a `linux/amd64` image. After publication:
+`v1.0.0-rc.1` provides a release-candidate `linux/amd64` image for final validation. After the tag is published:
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1
 ```
 
 With Compose:
@@ -191,6 +191,7 @@ Linux and macOS CI save OpenCV only after a successful build and install, while 
 
 ## Quality, security, and compatibility documents
 
+- [v1.0.0-rc.1 release candidate notes](docs/releases/v1.0.0-rc.1.md)
 - [Compatibility matrix](docs/COMPATIBILITY.md)
 - [Frozen v1 contracts](docs/CONTRACTS.md)
 - [Testing strategy and local commands](docs/TESTING.md)

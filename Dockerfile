@@ -64,7 +64,7 @@ RUN python3 scripts/validate_model_manifest.py \
 
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
-ARG VERSION=0.7.0
+ARG VERSION=1.0.0-rc.1
 LABEL org.opencontainers.image.title="lw.PPOCR.OpenCVDNN" \
       org.opencontainers.image.description="Cross-platform PP-OCR HTTP service powered by OpenCV DNN" \
       org.opencontainers.image.version="${VERSION}" \

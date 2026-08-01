@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 0.7.0
+  PACKAGE_VERSION: 1.0.0-rc.1
   OPENCV_WINDOWS_SHA256: 9c6c1fcea58acdf06edba13148b2246e00c2658143fa51e61ecd370db8c39f63
 
 jobs:
@@ -39,7 +39,8 @@ jobs:
             "scripts/logging_smoke.py", "scripts/json_schema.py", `
             "scripts/check_abi.py", "scripts/validate_contracts.py", `
             "scripts/dependency_tools.py", "scripts/validate_dependencies.py", `
-            "scripts/validate_model_manifest.py") | ForEach-Object {
+            "scripts/validate_model_manifest.py", `
+            "scripts/validate_release_version.py") | ForEach-Object {
             if (-not (Test-Path -LiteralPath $_ -PathType Leaf)) {
               throw "Required repository script is missing: $_"
             }
@@ -48,6 +49,7 @@ jobs:
             --manifest models/ppocrv6-tiny/model.json --require-sha256
           python scripts/validate_contracts.py
           python scripts/validate_dependencies.py
+          python scripts/validate_release_version.py
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -124,8 +126,10 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           $package = "dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-windows-x64"
-          @("dependencies.lock.json", "sbom/lw.PPOCR.OpenCVDNN.cdx.json", `
-            "schemas/http-api-v1.openapi.json") | ForEach-Object {
+          @("RELEASE_VERSION", "dependencies.lock.json", `
+            "sbom/lw.PPOCR.OpenCVDNN.cdx.json", `
+            "schemas/http-api-v1.openapi.json", `
+            "docs/releases/v${{ env.PACKAGE_VERSION }}.md") | ForEach-Object {
             if (-not (Test-Path -LiteralPath (Join-Path $package $_) -PathType Leaf)) {
               throw "Missing release metadata: $_"
             }

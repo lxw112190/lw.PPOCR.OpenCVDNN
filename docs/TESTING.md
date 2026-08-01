@@ -24,9 +24,10 @@ Run the repository-only checks without compiling:
 ```bash
 python3 scripts/validate_model_manifest.py \
   --manifest models/ppocrv6-tiny/model.json --require-sha256
+python3 scripts/validate_release_version.py
 python3 scripts/validate_contracts.py
 python3 scripts/validate_dependencies.py
-python3 scripts/generate_sbom.py --version 0.7.0 \
+python3 scripts/generate_sbom.py --version 1.0.0-rc.1 \
   --output build/lw.PPOCR.OpenCVDNN.cdx.json
 ```
 

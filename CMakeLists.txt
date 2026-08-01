@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(lw.PPOCR.OpenCVDNN VERSION 0.7.0 LANGUAGES C CXX)
+# CMake requires a numeric project version. The public pre-release suffix is
+# carried by LW_PPOCR_VERSION_STRING in include/lw/ppocr.h.
+project(lw.PPOCR.OpenCVDNN VERSION 1.0.0 LANGUAGES C CXX)
 
 option(LW_PPOCR_BUILD_HTTP_SERVICE "Build the cpp-httplib HTTP service" ON)
 option(LW_PPOCR_BUILD_EXAMPLES "Build native examples" ON)
@@ -166,6 +168,7 @@ install(FILES
     SECURITY.md
     THIRD-PARTY-NOTICES.md
     dependencies.lock.json
+    RELEASE_VERSION
     DESTINATION .)
 install(FILES sbom/lw.PPOCR.OpenCVDNN.cdx.json DESTINATION sbom)
 install(FILES docs/assets/sponsor.jpg DESTINATION docs/assets)
@@ -179,7 +182,10 @@ install(FILES docs/COMPATIBILITY.md DESTINATION docs)
 install(FILES docs/CONTRACTS.md DESTINATION docs)
 install(FILES docs/TESTING.md DESTINATION docs)
 install(FILES docs/SUPPLY-CHAIN.md DESTINATION docs)
-install(FILES docs/releases/v0.7.0.md DESTINATION docs/releases)
+install(FILES
+    docs/releases/v0.7.0.md
+    docs/releases/v1.0.0-rc.1.md
+    DESTINATION docs/releases)
 install(FILES tests/abi/exports-v1.txt DESTINATION docs)
 install(DIRECTORY tests/fixtures DESTINATION tests)
 install(FILES tests/regression/ppocrv6-tiny.json DESTINATION tests/regression)

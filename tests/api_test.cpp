@@ -64,6 +64,9 @@ int main() {
     version.struct_size = sizeof(version);
     if (lw_ppocr_get_version(&version) != LW_PPOCR_STATUS_OK ||
         version.api_version != LW_PPOCR_API_VERSION ||
+        version.major != LW_PPOCR_VERSION_MAJOR ||
+        version.minor != LW_PPOCR_VERSION_MINOR ||
+        version.patch != LW_PPOCR_VERSION_PATCH ||
         std::strcmp(version.version_utf8, LW_PPOCR_VERSION_STRING) != 0) {
         return 5;
     }

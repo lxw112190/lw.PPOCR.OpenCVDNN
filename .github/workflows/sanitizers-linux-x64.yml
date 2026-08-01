@@ -90,9 +90,11 @@ jobs:
             scripts/http_contract_test.py scripts/config_contract_test.py \
             scripts/ocr_regression.py \
             scripts/json_schema.py scripts/validate_contracts.py \
-            scripts/dependency_tools.py scripts/validate_dependencies.py
+            scripts/dependency_tools.py scripts/validate_dependencies.py \
+            scripts/validate_release_version.py
           python3 scripts/validate_contracts.py
           python3 scripts/validate_dependencies.py
+          python3 scripts/validate_release_version.py
           config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0" \
             -name OpenCVConfig.cmake -print -quit)"
           test -n "$config"

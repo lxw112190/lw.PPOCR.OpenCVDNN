@@ -18,10 +18,18 @@ if [[ -e "$package_dir" ]]; then
   exit 2
 fi
 
-mkdir -p "$package_dir/docs"
+release_note="$root/docs/releases/v${version}.md"
+if [[ ! -f "$release_note" ]]; then
+  echo "Release note is missing: $release_note" >&2
+  exit 2
+fi
+
+mkdir -p "$package_dir/docs/releases"
 cp "$root/docker-compose.yml" "$package_dir/"
 cp "$root/.env.example" "$package_dir/"
+cp "$root/RELEASE_VERSION" "$package_dir/"
 cp "$root/docs/DOCKER.md" "$package_dir/docs/"
+cp "$release_note" "$package_dir/docs/releases/"
 cp "$root/LICENSE" "$package_dir/"
 
 tar -C "$output_dir" -czf "${output_dir}/${package_name}.tar.gz" \

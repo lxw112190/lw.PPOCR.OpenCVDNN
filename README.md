@@ -6,7 +6,7 @@
 
 当前内置模型为 PP-OCRv6 Tiny Chinese，推理设备为 CPU。项目不依赖 Paddle Runtime、ONNX Runtime、DirectML、OpenVINO 或 TensorRT。
 
-> 当前开发版本：`v0.7.0`。C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与日志 Schema v1 均已冻结；本版完成正确性、安全性与供应链发布门禁。
+> 当前候选版本：`v1.0.0-rc.1`。C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与日志 Schema v1 均已冻结；RC 阶段只接受 Bug 修复，不再调整公共接口。正式生产部署前请在目标环境验证候选包。
 
 ## 主要能力
 
@@ -21,7 +21,7 @@
 - Docker / Docker Compose：Linux x64 非 root 镜像、健康检查、持久化日志和 GHCR 发布。
 - 正确性与健壮性回归：固定样图、文字顺序、方向分类、置信度、检测框、批量顺序、异常输入恢复、ASan/UBSan 与长时间内存增长均有自动门禁。
 - 接口契约：C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与 JSONL 日志 Schema v1 自动防回退。
-- 供应链：依赖与模型哈希锁定、CycloneDX 1.6 SBOM、CodeQL、PR 依赖审查和 Dependabot。
+- 供应链：依赖与模型哈希锁定、CycloneDX 1.6 SBOM、CodeQL、PR 依赖审查和定时供应链校验；自动 Dependabot 更新 PR 已停用，依赖升级由人工审查后执行。
 - Windows x64、Linux x64、Linux ARM64（统信 UOS 20 兼容基线）、macOS ARM64 CI；核心代码不包含平台专用推理逻辑。
 
 ## 快速使用 HTTP 服务
@@ -56,12 +56,12 @@ chmod +x run-http-service.sh
 
 ### Docker / Docker Compose
 
-`v0.7.0` 提供 `linux/amd64` 容器镜像。发布后可直接运行：
+`v1.0.0-rc.1` 提供用于最终验证的 `linux/amd64` 候选容器镜像。标签发布后可直接运行：
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0-rc.1
 ```
 
 使用 Compose：
@@ -221,6 +221,7 @@ Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相�
 
 ## 质量、安全与兼容性文档
 
+- [v1.0.0-rc.1 发布候选说明](docs/releases/v1.0.0-rc.1.md)
 - [兼容矩阵](docs/COMPATIBILITY.md)
 - [v1 契约冻结规则](docs/CONTRACTS.md)
 - [测试策略与本地命令](docs/TESTING.md)

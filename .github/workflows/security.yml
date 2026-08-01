@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 0.7.0
+  PACKAGE_VERSION: 1.0.0-rc.1
   OPENCV_VERSION: 5.0.0
   OPENCV_SOURCE_SHA256: b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
 
@@ -33,9 +33,11 @@ jobs:
         run: |
           python3 -m py_compile scripts/dependency_tools.py \
             scripts/validate_dependencies.py scripts/generate_sbom.py \
-            scripts/json_schema.py scripts/validate_contracts.py
+            scripts/json_schema.py scripts/validate_contracts.py \
+            scripts/validate_release_version.py
           python3 scripts/validate_dependencies.py
           python3 scripts/validate_contracts.py
+          python3 scripts/validate_release_version.py
           python3 scripts/validate_model_manifest.py \
             --manifest models/ppocrv6-tiny/model.json --require-sha256
 
