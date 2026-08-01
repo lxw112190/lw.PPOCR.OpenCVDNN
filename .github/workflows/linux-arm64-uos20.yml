@@ -17,8 +17,9 @@ concurrency:
 
 env:
   OPENCV_VERSION: 5.0.0
+  OPENCV_SOURCE_SHA256: b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
   CMAKE_VERSION: 3.31.6
-  PACKAGE_VERSION: 0.4.0
+  PACKAGE_VERSION: 0.7.0
   PACKAGE_PLATFORM: arm64-uos20
 
 jobs:
@@ -72,7 +73,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: .ci/opencv-5.0.0-debian10-arm64
-          key: opencv-5.0.0-debian10-arm64-gcc8-armv8a-minimal-v1
+          key: opencv-5.0.0-debian10-arm64-gcc8-armv8a-minimal-v2-b0528f5a
 
       - name: Build minimal OpenCV ARM64
         if: steps.opencv-cache.outputs.cache-hit != 'true'
@@ -81,8 +82,9 @@ jobs:
           mkdir -p .ci /tmp/opencv-source /tmp/opencv-build
           curl --fail --location --retry 5 --retry-delay 5 \
             --retry-connrefused \
-            "https://github.com/opencv/opencv/archive/refs/tags/${OPENCV_VERSION}.tar.gz" \
+            "https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz" \
             --output /tmp/opencv.tar.gz
+          echo "${OPENCV_SOURCE_SHA256}  /tmp/opencv.tar.gz" | sha256sum -c -
           tar -xzf /tmp/opencv.tar.gz --strip-components=1 -C /tmp/opencv-source
           cmake -S /tmp/opencv-source -B /tmp/opencv-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -114,10 +116,16 @@ jobs:
         run: |
           bash -n deploy/linux/*.sh scripts/package_linux.sh
           python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py \
-            scripts/ocr_regression.py scripts/logging_smoke.py scripts/check_abi.py \
+            scripts/http_invalid_inputs.py scripts/http_contract_test.py \
+            scripts/config_contract_test.py \
+            scripts/ocr_regression.py scripts/logging_smoke.py scripts/json_schema.py \
+            scripts/check_abi.py scripts/validate_contracts.py \
+            scripts/dependency_tools.py scripts/validate_dependencies.py \
             scripts/validate_model_manifest.py
           python3 scripts/validate_model_manifest.py \
             --manifest models/ppocrv6-tiny/model.json --require-sha256
+          python3 scripts/validate_contracts.py
+          python3 scripts/validate_dependencies.py
           config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0-debian10-arm64" \
             -name OpenCVConfig.cmake -print -quit)"
           test -n "$config"
@@ -142,6 +150,9 @@ jobs:
             build/ci-arm64-uos20 .ci/opencv-5.0.0-debian10-arm64 \
             dist "$PACKAGE_VERSION" "$PACKAGE_PLATFORM"
           package="dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-${PACKAGE_PLATFORM}"
+          test -f "$package/dependencies.lock.json"
+          test -f "$package/sbom/lw.PPOCR.OpenCVDNN.cdx.json"
+          test -f "$package/schemas/http-api-v1.openapi.json"
           for script in run-http-service.sh install-service.sh uninstall-service.sh \
                         start-service.sh stop-service.sh restart-service.sh; do
             test -x "$package/$script"
@@ -153,6 +164,7 @@ jobs:
           grep -Fx 'opencv=5.0.0' "$package/BUILD-ENVIRONMENT.txt"
           python3 scripts/validate_model_manifest.py \
             --manifest "$package/models/ppocrv6-tiny/model.json" --require-sha256
+          python3 scripts/config_contract_test.py --package-dir "$package"
           python3 scripts/http_smoke.py --package-dir "$package" --port 18787
           python3 scripts/logging_smoke.py --package-dir "$package" --port 18785 \
             --access-format jsonl
@@ -160,6 +172,10 @@ jobs:
             --port 18783 --access-format text
           python3 scripts/ocr_regression.py --package-dir "$package" \
             --cases tests/regression/ppocrv6-tiny.json --port 18786
+          python3 scripts/http_invalid_inputs.py --package-dir "$package" \
+            --port 18784
+          python3 scripts/http_contract_test.py --package-dir "$package" \
+            --port 18782
           python3 scripts/check_abi.py \
             --library "$package/liblw.PPOCR.OpenCVDNN.so"
           python3 scripts/http_stress.py --package-dir "$package" \

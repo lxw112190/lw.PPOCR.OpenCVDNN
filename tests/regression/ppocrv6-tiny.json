@@ -1,12 +1,15 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "model": "PP-OCRv6 tiny Chinese",
   "cases": [
     {
       "id": "ppocrv6-tiny-sample-full-ocr",
-      "image": "models/ppocrv6-tiny/sample.jpg",
-      "image_sha256": "30c417c9f758a3b62718729f5a944f7d2e10cdd2bde0e8ce6785523ddb68ffe9",
-      "endpoint": "/api/ocr",
+      "operation": "ocr",
+      "transport": "binary",
+      "image": {
+        "path": "models/ppocrv6-tiny/sample.jpg",
+        "sha256": "30c417c9f758a3b62718729f5a944f7d2e10cdd2bde0e8ce6785523ddb68ffe9"
+      },
       "image_size": [500, 500],
       "minimum_score": 0.85,
       "box_tolerance_px": 5.0,
@@ -27,6 +30,88 @@
         {"text": "【主要功能】：可紧致头发磷层，从而达到", "cls_label": 0, "bounds": [23.44, 393.55, 363.28, 416.02]},
         {"text": "即时持久改善头发光泽的效果，给干燥的头", "cls_label": 0, "bounds": [25.39, 426.76, 374.02, 446.29]},
         {"text": "发足够的滋养", "cls_label": 0, "bounds": [24.41, 456.05, 137.70, 478.52]}
+      ]
+    },
+    {
+      "id": "blank-64x32-full-ocr",
+      "operation": "ocr",
+      "transport": "binary",
+      "image": {
+        "generated": "solid_bmp",
+        "width": 64,
+        "height": 32,
+        "bgr": [255, 255, 255]
+      },
+      "image_size": [64, 32],
+      "minimum_score": 0.0,
+      "box_tolerance_px": 0.0,
+      "expected": []
+    },
+    {
+      "id": "headline-recognition-binary",
+      "operation": "recognize",
+      "transport": "binary",
+      "image": {
+        "path": "tests/fixtures/ppocrv6-tiny/headline.png",
+        "sha256": "90a77968debc24a8a397b70e50bce15b906d6e2ee571bf107f6f14828dc9fb1b"
+      },
+      "minimum_score": 0.98,
+      "minimum_cls_score": 0.95,
+      "expected": [
+        {"text": "纯臻营养护发素", "cls_label": 0}
+      ]
+    },
+    {
+      "id": "product-info-recognition-json-base64",
+      "operation": "recognize",
+      "transport": "json_base64",
+      "image": {
+        "path": "tests/fixtures/ppocrv6-tiny/product-info.png",
+        "sha256": "0d3e21d6c646b8593f4103b3904025715a046225348baf4452ceaf63654b0e0c"
+      },
+      "minimum_score": 0.98,
+      "minimum_cls_score": 0.95,
+      "expected": [
+        {"text": "产品信息/参数", "cls_label": 0}
+      ]
+    },
+    {
+      "id": "upside-down-direction-classification",
+      "operation": "recognize",
+      "transport": "binary",
+      "image": {
+        "path": "tests/fixtures/ppocrv6-tiny/odm-oem-upside-down.png",
+        "sha256": "282a53aa90d1aa9319cf74cbb71fbe5f7798ca532e746255b23b6b7d28e5c51f"
+      },
+      "minimum_score": 0.90,
+      "minimum_cls_score": 0.95,
+      "expected": [
+        {"text": "ODM OEM", "cls_label": 1}
+      ]
+    },
+    {
+      "id": "three-line-recognition-batch-order",
+      "operation": "recognize_batch",
+      "images": [
+        {
+          "path": "tests/fixtures/ppocrv6-tiny/headline.png",
+          "sha256": "90a77968debc24a8a397b70e50bce15b906d6e2ee571bf107f6f14828dc9fb1b"
+        },
+        {
+          "path": "tests/fixtures/ppocrv6-tiny/odm-oem-upside-down.png",
+          "sha256": "282a53aa90d1aa9319cf74cbb71fbe5f7798ca532e746255b23b6b7d28e5c51f"
+        },
+        {
+          "path": "tests/fixtures/ppocrv6-tiny/product-info.png",
+          "sha256": "0d3e21d6c646b8593f4103b3904025715a046225348baf4452ceaf63654b0e0c"
+        }
+      ],
+      "minimum_score": 0.90,
+      "minimum_cls_score": 0.90,
+      "expected": [
+        {"text": "纯臻营养护发素", "cls_label": 0},
+        {"text": "ODM OEM", "cls_label": 1},
+        {"text": "产品信息/参数", "cls_label": 0}
       ]
     }
   ]

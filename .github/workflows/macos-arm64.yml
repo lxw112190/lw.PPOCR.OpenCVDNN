@@ -14,7 +14,8 @@ concurrency:
 
 env:
   OPENCV_VERSION: 5.0.0
-  PACKAGE_VERSION: 0.4.0
+  OPENCV_SOURCE_SHA256: b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
+  PACKAGE_VERSION: 0.7.0
   MACOSX_DEPLOYMENT_TARGET: "12.0"
 
 jobs:
@@ -31,7 +32,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: .ci/opencv-5.0.0
-          key: opencv-5.0.0-macos-15-arm64-minimal-v1
+          key: opencv-5.0.0-macos-15-arm64-minimal-v2-b0528f5a
 
       - name: Build minimal OpenCV
         if: steps.opencv-cache.outputs.cache-hit != 'true'
@@ -39,8 +40,10 @@ jobs:
           mkdir -p .ci "$RUNNER_TEMP/opencv-source" "$RUNNER_TEMP/opencv-build"
           curl --fail --location --retry 5 --retry-delay 5 \
             --retry-connrefused \
-            "https://github.com/opencv/opencv/archive/refs/tags/${OPENCV_VERSION}.tar.gz" \
+            "https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz" \
             --output "$RUNNER_TEMP/opencv.tar.gz"
+          echo "${OPENCV_SOURCE_SHA256}  $RUNNER_TEMP/opencv.tar.gz" | \
+            shasum -a 256 -c -
           tar -xzf "$RUNNER_TEMP/opencv.tar.gz" --strip-components=1 \
             -C "$RUNNER_TEMP/opencv-source"
           cmake -S "$RUNNER_TEMP/opencv-source" -B "$RUNNER_TEMP/opencv-build" \
@@ -74,10 +77,16 @@ jobs:
         run: |
           bash -n scripts/package_macos.sh
           python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py \
-            scripts/ocr_regression.py scripts/logging_smoke.py scripts/check_abi.py \
+            scripts/http_invalid_inputs.py scripts/http_contract_test.py \
+            scripts/config_contract_test.py \
+            scripts/ocr_regression.py scripts/logging_smoke.py scripts/json_schema.py \
+            scripts/check_abi.py scripts/validate_contracts.py \
+            scripts/dependency_tools.py scripts/validate_dependencies.py \
             scripts/validate_model_manifest.py
           python3 scripts/validate_model_manifest.py \
             --manifest models/ppocrv6-tiny/model.json --require-sha256
+          python3 scripts/validate_contracts.py
+          python3 scripts/validate_dependencies.py
           config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0" \
             -name OpenCVConfig.cmake -print -quit)"
           test -n "$config"
@@ -99,15 +108,24 @@ jobs:
           bash scripts/package_macos.sh build/ci .ci/opencv-5.0.0 dist \
             "$PACKAGE_VERSION"
           package="dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-macos-arm64"
+          test -f "$package/dependencies.lock.json"
+          test -f "$package/sbom/lw.PPOCR.OpenCVDNN.cdx.json"
+          test -f "$package/schemas/http-api-v1.openapi.json"
           file "$package/lw-ppocr-http-service" | grep -q arm64
           python3 scripts/validate_model_manifest.py \
             --manifest "$package/models/ppocrv6-tiny/model.json" --require-sha256
+          python3 scripts/config_contract_test.py --package-dir "$package"
           python3 scripts/http_smoke.py --package-dir "$package" --port 18787
-          python3 scripts/logging_smoke.py --package-dir "$package" --port 18785
+          python3 scripts/logging_smoke.py --package-dir "$package" --port 18785 \
+            --access-format jsonl
           python3 scripts/logging_smoke.py --package-dir "$package" --port 18783 \
             --access-format text
           python3 scripts/ocr_regression.py --package-dir "$package" \
             --cases tests/regression/ppocrv6-tiny.json --port 18786
+          python3 scripts/http_invalid_inputs.py --package-dir "$package" \
+            --port 18784
+          python3 scripts/http_contract_test.py --package-dir "$package" \
+            --port 18782
           python3 scripts/check_abi.py \
             --library "$package/liblw.PPOCR.OpenCVDNN.dylib"
           python3 scripts/http_stress.py --package-dir "$package" \

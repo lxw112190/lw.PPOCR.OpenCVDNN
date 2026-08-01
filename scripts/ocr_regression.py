@@ -2,11 +2,13 @@
 """Run deterministic OCR correctness cases against a packaged HTTP service."""
 
 import argparse
+import base64
 import hashlib
 import json
 import os
 import pathlib
 import platform
+import struct
 import subprocess
 import sys
 import time
@@ -26,11 +28,58 @@ def request_json(url: str, data=None, content_type=None, timeout=120):
     if content_type:
         request.add_header("Content-Type", content_type)
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.status, json.loads(response.read().decode("utf-8"))
+        headers = dict(response.headers.items())
+        return response.status, headers, json.loads(
+            response.read().decode("utf-8"))
+
+
+def make_solid_bmp(width: int, height: int, bgr) -> bytes:
+    if width < 1 or height < 1 or len(bgr) != 3:
+        raise ValueError("invalid generated BMP dimensions or color")
+    row_size = (width * 3 + 3) & ~3
+    pixel = bytes(int(value) for value in bgr)
+    row = pixel * width + bytes(row_size - width * 3)
+    body_size = row_size * height
+    file_header = struct.pack("<2sIHHI", b"BM", 54 + body_size, 0, 0, 54)
+    info_header = struct.pack(
+        "<IIIHHIIIIII", 40, width, height, 1, 24, 0, body_size,
+        2835, 2835, 0, 0)
+    return file_header + info_header + row * height
+
+
+def load_image(specification, package):
+    if isinstance(specification, str):
+        specification = {"path": specification}
+    if not isinstance(specification, dict):
+        raise AssertionError("image specification must be a path or object")
+    if "path" in specification:
+        path = package / specification["path"]
+        image = path.read_bytes()
+        expected_digest = specification.get("sha256")
+        if expected_digest:
+            actual_digest = hashlib.sha256(image).hexdigest()
+            if actual_digest.lower() != expected_digest.lower():
+                raise AssertionError(
+                    f"{path}: image SHA-256 changed: {actual_digest}")
+        suffixes = {
+            ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".png": "image/png", ".bmp": "image/bmp",
+        }
+        content_type = specification.get(
+            "content_type", suffixes.get(path.suffix.lower(),
+                "application/octet-stream"))
+        return image, content_type
+    generated = specification.get("generated")
+    if generated == "solid_bmp":
+        return make_solid_bmp(
+            int(specification["width"]), int(specification["height"]),
+            specification.get("bgr", [245, 245, 245])), "image/bmp"
+    raise AssertionError("unsupported image specification")
 
 
 def bounds(item):
-    keys = [f"{axis}{index}" for axis in ("x", "y") for index in range(1, 5)]
+    keys = [f"{axis}{index}" for axis in ("x", "y")
+        for index in range(1, 5)]
     if not all(isinstance(item.get(key), (int, float)) for key in keys):
         raise AssertionError("OCR region must contain x1/y1 through x4/y4")
     if "box" in item:
@@ -40,65 +89,137 @@ def bounds(item):
     return [min(x_values), min(y_values), max(x_values), max(y_values)]
 
 
-def validate_case(case, package, base_url):
-    image_path = package / case["image"]
-    image = image_path.read_bytes()
-    actual_digest = hashlib.sha256(image).hexdigest()
-    if actual_digest.lower() != case["image_sha256"].lower():
-        raise AssertionError(
-            f"{case['id']}: image SHA-256 changed: {actual_digest}")
+def validate_timing(document, operation):
+    timing = document.get("timing")
+    if not isinstance(timing, dict) or not isinstance(
+            timing.get("decode_ms"), (int, float)):
+        raise AssertionError(f"{operation}: invalid timing object")
+    required = ["classifier", "recognizer", "pipeline"]
+    if operation == "ocr":
+        required.insert(0, "detector")
+    for name in required:
+        stage = timing.get(name)
+        if not isinstance(stage, dict):
+            raise AssertionError(f"{operation}: missing {name} timing")
+        for field in ("preprocess_ms", "inference_ms", "postprocess_ms",
+                      "total_ms"):
+            value = stage.get(field)
+            if not isinstance(value, (int, float)) or value < 0:
+                raise AssertionError(
+                    f"{operation}: invalid {name}.{field} timing")
+    server_total = timing.get("server_total_ms")
+    if not isinstance(server_total, (int, float)) or server_total < 0:
+        raise AssertionError(f"{operation}: invalid server_total_ms")
 
-    status, document = request_json(
-        base_url + case["endpoint"], image, "image/jpeg")
+
+def send_case(case, package, base_url):
+    operation = case["operation"]
+    endpoint = "/api/ocr" if operation == "ocr" else "/api/recognize"
+    if operation == "recognize_batch":
+        images = [load_image(specification, package)[0]
+            for specification in case["images"]]
+        body = json.dumps({"images_base64": [
+            base64.b64encode(image).decode("ascii") for image in images
+        ]}).encode("utf-8")
+        return request_json(base_url + endpoint, body, "application/json")
+
+    image, content_type = load_image(case["image"], package)
+    transport = case.get("transport", "binary")
+    if transport == "binary":
+        return request_json(base_url + endpoint, image, content_type)
+    if transport == "json_base64":
+        encoded = base64.b64encode(image).decode("ascii")
+        body = json.dumps({"image_base64": encoded}).encode("utf-8")
+        return request_json(base_url + endpoint, body, "application/json")
+    raise AssertionError(f"unsupported transport: {transport}")
+
+
+def validate_item(case, index, actual, expected, require_bounds):
+    if actual.get("text") != expected["text"]:
+        raise AssertionError(
+            f"{case['id']} item {index}: expected text "
+            f"{expected['text']!r}, got {actual.get('text')!r}")
+    if actual.get("cls_label") != expected["cls_label"]:
+        raise AssertionError(
+            f"{case['id']} item {index}: classifier label changed")
+    minimum_score = float(expected.get(
+        "minimum_score", case.get("minimum_score", 0.0)))
+    if float(actual.get("score", -1)) < minimum_score:
+        raise AssertionError(
+            f"{case['id']} item {index}: score below {minimum_score}")
+    minimum_cls_score = float(expected.get(
+        "minimum_cls_score", case.get("minimum_cls_score", 0.0)))
+    if float(actual.get("cls_score", -1)) < minimum_cls_score:
+        raise AssertionError(
+            f"{case['id']} item {index}: cls_score below "
+            f"{minimum_cls_score}")
+
+    if not require_bounds:
+        if actual.get("source_index") != index:
+            raise AssertionError(
+                f"{case['id']} item {index}: source_index changed")
+        for coordinate in [f"{axis}{point}" for axis in ("x", "y")
+                           for point in range(1, 5)]:
+            if coordinate in actual:
+                raise AssertionError(
+                    f"{case['id']} item {index}: recognition result contains "
+                    f"unexpected coordinate {coordinate}")
+        return 0.0
+
+    actual_bounds = bounds(actual)
+    tolerance = float(case["box_tolerance_px"])
+    deltas = [abs(actual_value - expected_value)
+        for actual_value, expected_value in zip(
+            actual_bounds, expected["bounds"])]
+    if max(deltas) > tolerance:
+        raise AssertionError(
+            f"{case['id']} item {index}: bounds changed by "
+            f"{max(deltas):.2f}px (limit {tolerance:.2f}px)")
+    return max(deltas)
+
+
+def validate_case(case, package, base_url):
+    status, headers, document = send_case(case, package, base_url)
     if status != 200 or document.get("ok") is not True:
-        raise AssertionError(f"{case['id']}: OCR failed: {document}")
+        raise AssertionError(f"{case['id']}: inference failed: {document}")
     if document.get("backend") != "opencv-dnn":
         raise AssertionError(f"{case['id']}: unexpected backend")
-    expected_width, expected_height = case["image_size"]
-    if document.get("image") != {
-            "width": expected_width, "height": expected_height}:
-        raise AssertionError(
-            f"{case['id']}: unexpected image dimensions: {document.get('image')}")
+    if headers.get("X-Request-ID") != document.get("request_id"):
+        raise AssertionError(f"{case['id']}: request ID header mismatch")
+
+    operation = case["operation"]
+    validate_timing(document, operation)
+    if operation == "ocr":
+        expected_width, expected_height = case["image_size"]
+        if document.get("image") != {
+                "width": expected_width, "height": expected_height}:
+            raise AssertionError(
+                f"{case['id']}: unexpected image dimensions: "
+                f"{document.get('image')}")
+    elif operation == "recognize_batch":
+        if document.get("image_count") != len(case["images"]):
+            raise AssertionError(f"{case['id']}: image_count changed")
 
     actual_items = document.get("result")
     expected_items = case["expected"]
     if not isinstance(actual_items, list) or \
             len(actual_items) != len(expected_items):
         raise AssertionError(
-            f"{case['id']}: expected {len(expected_items)} regions, "
+            f"{case['id']}: expected {len(expected_items)} items, "
             f"got {len(actual_items) if isinstance(actual_items, list) else 'invalid'}")
 
-    tolerance = float(case["box_tolerance_px"])
-    minimum_score = float(case["minimum_score"])
     maximum_box_delta = 0.0
     for index, (actual, expected) in enumerate(
             zip(actual_items, expected_items)):
-        if actual.get("text") != expected["text"]:
-            raise AssertionError(
-                f"{case['id']} region {index}: expected text "
-                f"{expected['text']!r}, got {actual.get('text')!r}")
-        if actual.get("cls_label") != expected["cls_label"]:
-            raise AssertionError(
-                f"{case['id']} region {index}: classifier label changed")
-        if float(actual.get("score", -1)) < minimum_score:
-            raise AssertionError(
-                f"{case['id']} region {index}: score below {minimum_score}")
-        actual_bounds = bounds(actual)
-        deltas = [abs(actual_value - expected_value)
-            for actual_value, expected_value in zip(
-                actual_bounds, expected["bounds"])]
-        maximum_box_delta = max(maximum_box_delta, max(deltas))
-        if max(deltas) > tolerance:
-            raise AssertionError(
-                f"{case['id']} region {index}: bounds changed by "
-                f"{max(deltas):.2f}px (limit {tolerance:.2f}px)")
-
+        maximum_box_delta = max(maximum_box_delta, validate_item(
+            case, index, actual, expected, operation == "ocr"))
+    scores = [float(item["score"]) for item in actual_items]
     return {
         "id": case["id"],
-        "regions": len(actual_items),
+        "operation": operation,
+        "items": len(actual_items),
         "maximum_box_delta_px": round(maximum_box_delta, 3),
-        "minimum_actual_score": round(min(
-            float(item["score"]) for item in actual_items), 6),
+        "minimum_actual_score": round(min(scores), 6) if scores else None,
     }
 
 
@@ -113,8 +234,9 @@ def main() -> int:
     args = parser.parse_args()
 
     package = args.package_dir.resolve()
-    cases_document = json.loads(args.cases.resolve().read_text(encoding="utf-8"))
-    if cases_document.get("schema_version") != 1 or \
+    cases_document = json.loads(
+        args.cases.resolve().read_text(encoding="utf-8"))
+    if cases_document.get("schema_version") != 2 or \
             not cases_document.get("cases"):
         raise RuntimeError("invalid OCR regression case file")
     executable = package / ("lw-ppocr-http-service.exe"
@@ -142,7 +264,8 @@ def main() -> int:
             if process.poll() is not None:
                 break
             try:
-                status, health = request_json(base_url + "/health", timeout=2)
+                status, _, health = request_json(
+                    base_url + "/health", timeout=2)
                 if status == 200 and health.get("ok") is True:
                     break
             except (urllib.error.URLError, TimeoutError):

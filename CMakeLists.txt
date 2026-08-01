@@ -1,10 +1,29 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(lw.PPOCR.OpenCVDNN VERSION 0.4.0 LANGUAGES C CXX)
+project(lw.PPOCR.OpenCVDNN VERSION 0.7.0 LANGUAGES C CXX)
 
 option(LW_PPOCR_BUILD_HTTP_SERVICE "Build the cpp-httplib HTTP service" ON)
 option(LW_PPOCR_BUILD_EXAMPLES "Build native examples" ON)
 option(LW_PPOCR_BUILD_TESTS "Build tests" ON)
+option(LW_PPOCR_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+
+function(lw_ppocr_enable_sanitizers target)
+    if(NOT LW_PPOCR_ENABLE_SANITIZERS)
+        return()
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE
+            -fsanitize=address,undefined
+            -fno-omit-frame-pointer
+            -fno-sanitize-recover=all)
+        target_link_options(${target} PRIVATE
+            -fsanitize=address,undefined
+            -fno-sanitize-recover=all)
+    else()
+        message(FATAL_ERROR
+            "LW_PPOCR_ENABLE_SANITIZERS requires GCC or Clang")
+    endif()
+endfunction()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,6 +62,7 @@ target_include_directories(lw_ppocr
         third_party/clipper
         third_party/nlohmann-json)
 target_link_libraries(lw_ppocr PRIVATE ${OpenCV_LIBS} Threads::Threads)
+lw_ppocr_enable_sanitizers(lw_ppocr)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
    CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
     # GCC 8 implements C++17 filesystem in a separate compatibility library.
@@ -80,6 +100,7 @@ if(LW_PPOCR_BUILD_HTTP_SERVICE)
         third_party/nlohmann-json
         third_party/spdlog/include)
     target_link_libraries(lw-ppocr-http-service PRIVATE lw_ppocr Threads::Threads)
+    lw_ppocr_enable_sanitizers(lw-ppocr-http-service)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
        CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
         target_link_libraries(lw-ppocr-http-service PRIVATE stdc++fs)
@@ -94,6 +115,7 @@ if(LW_PPOCR_BUILD_EXAMPLES)
     add_executable(lw-ppocr-c-example examples/c/main.c)
     target_include_directories(lw-ppocr-c-example PRIVATE include)
     target_link_libraries(lw-ppocr-c-example PRIVATE lw_ppocr)
+    lw_ppocr_enable_sanitizers(lw-ppocr-c-example)
 endif()
 
 include(CTest)
@@ -101,6 +123,7 @@ if(BUILD_TESTING AND LW_PPOCR_BUILD_TESTS)
     add_executable(lw-ppocr-api-test tests/api_test.cpp)
     target_include_directories(lw-ppocr-api-test PRIVATE include)
     target_link_libraries(lw-ppocr-api-test PRIVATE lw_ppocr)
+    lw_ppocr_enable_sanitizers(lw-ppocr-api-test)
     add_test(NAME api_version COMMAND lw-ppocr-api-test)
     add_executable(lw-ppocr-model-manifest-test
         tests/model_manifest_test.cpp
@@ -109,6 +132,7 @@ if(BUILD_TESTING AND LW_PPOCR_BUILD_TESTS)
         src/core/include
         third_party/nlohmann-json)
     target_link_libraries(lw-ppocr-model-manifest-test PRIVATE ${OpenCV_LIBS})
+    lw_ppocr_enable_sanitizers(lw-ppocr-model-manifest-test)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
        CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
         target_link_libraries(lw-ppocr-model-manifest-test PRIVATE stdc++fs)
@@ -131,10 +155,19 @@ if(LW_PPOCR_BUILD_EXAMPLES)
 endif()
 install(FILES include/lw/ppocr.h DESTINATION include/lw)
 install(FILES models/model-manifest.schema.json DESTINATION models)
+install(DIRECTORY schemas DESTINATION .)
 install(DIRECTORY models/ppocrv6-tiny DESTINATION models)
 install(DIRECTORY www/ DESTINATION www)
 install(FILES http-service.json DESTINATION .)
-install(FILES README.md README.en.md LICENSE THIRD-PARTY-NOTICES.md DESTINATION .)
+install(FILES
+    README.md
+    README.en.md
+    LICENSE
+    SECURITY.md
+    THIRD-PARTY-NOTICES.md
+    dependencies.lock.json
+    DESTINATION .)
+install(FILES sbom/lw.PPOCR.OpenCVDNN.cdx.json DESTINATION sbom)
 install(FILES docs/assets/sponsor.jpg DESTINATION docs/assets)
 install(FILES docs/HTTP-API.md DESTINATION docs)
 install(FILES docs/DOCKER.md DESTINATION docs)
@@ -142,7 +175,30 @@ install(FILES docs/LINUX-ARM64-UOS20.md DESTINATION docs)
 install(FILES docs/LOGGING.md DESTINATION docs)
 install(FILES docs/C-ABI.md DESTINATION docs)
 install(FILES docs/MODEL-MANIFEST.md DESTINATION docs)
+install(FILES docs/COMPATIBILITY.md DESTINATION docs)
+install(FILES docs/CONTRACTS.md DESTINATION docs)
+install(FILES docs/TESTING.md DESTINATION docs)
+install(FILES docs/SUPPLY-CHAIN.md DESTINATION docs)
+install(FILES docs/releases/v0.7.0.md DESTINATION docs/releases)
 install(FILES tests/abi/exports-v1.txt DESTINATION docs)
+install(DIRECTORY tests/fixtures DESTINATION tests)
+install(FILES tests/regression/ppocrv6-tiny.json DESTINATION tests/regression)
+install(FILES
+    scripts/check_abi.py
+    scripts/config_contract_test.py
+    scripts/dependency_tools.py
+    scripts/generate_sbom.py
+    scripts/http_contract_test.py
+    scripts/http_invalid_inputs.py
+    scripts/http_smoke.py
+    scripts/http_stress.py
+    scripts/json_schema.py
+    scripts/logging_smoke.py
+    scripts/ocr_regression.py
+    scripts/validate_contracts.py
+    scripts/validate_dependencies.py
+    scripts/validate_model_manifest.py
+    DESTINATION scripts)
 install(DIRECTORY examples/python DESTINATION examples)
 install(DIRECTORY examples/csharp DESTINATION examples
     PATTERN "bin" EXCLUDE

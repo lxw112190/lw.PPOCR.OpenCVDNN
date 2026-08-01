@@ -6,7 +6,7 @@ A small, cross-platform PP-OCR inference project powered exclusively by **OpenCV
 
 The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the CPU. Paddle Runtime, ONNX Runtime, DirectML, OpenVINO, and TensorRT are not required.
 
-> Current version: `v0.4.0`. C ABI v1 and model-manifest Schema v1 remain frozen; this release focuses on production logging and request diagnostics.
+> Current development version: `v0.7.0`. C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and log Schema v1 are frozen; this release completes the correctness, security, and supply-chain gates.
 
 ## Features
 
@@ -19,8 +19,9 @@ The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the C
 - Optional API Key; runtime and request logging can be controlled independently.
 - Nginx-inspired log operations: split runtime/access logs, JSON Lines, request IDs, stage timings, trusted proxies, and privacy safeguards.
 - Docker and Docker Compose with a non-root Linux x64 image, health checks, persistent logs, and GHCR publishing.
-- Golden correctness regression for text order, orientation labels, confidence, and bounding-box tolerance.
-- Automated compatibility checks for C ABI v1 exports and layouts and model-manifest Schema v1.
+- Correctness and robustness gates for fixed images, text order, orientation, confidence, boxes, batch order, malformed-input recovery, ASan/UBSan, and long-run memory growth.
+- Automated compatibility checks for C ABI v1, model-manifest Schema v1, HTTP API v1, configuration Schema v1, and JSONL log Schema v1.
+- Supply-chain controls with dependency/model hashes, a CycloneDX 1.6 SBOM, CodeQL, pull-request dependency review, and Dependabot.
 - Windows x64, Linux x64, Linux ARM64 (UnionTech UOS 20 compatibility baseline), and macOS ARM64 CI, with platform-neutral inference code.
 
 ## HTTP quick start
@@ -53,12 +54,12 @@ Open <http://127.0.0.1:8787/>. Startup output always shows the author, QQ contac
 
 ### Docker / Docker Compose
 
-`v0.4.0` provides a `linux/amd64` image. After publication:
+`v0.7.0` provides a `linux/amd64` image. After publication:
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0
 ```
 
 With Compose:
@@ -132,7 +133,7 @@ Binary single-image requests accept `image/*` or `application/octet-stream`.
 Both raw Base64 and `data:image/png;base64,...` URLs are accepted in JSON. The
 browser page uses binary upload by default.
 
-See [docs/HTTP-API.md](docs/HTTP-API.md) for request, response, and status-code details.
+See [docs/HTTP-API.md](docs/HTTP-API.md) for request, response, and status-code details. JSON responses include `X-LW-PPOCR-API-Version: 1`; clients should branch on stable `error_code` values rather than parsing the diagnostic `error` text.
 
 ### API Key
 
@@ -159,7 +160,7 @@ The complete public surface is in [include/lw/ppocr.h](include/lw/ppocr.h). The 
 5. Release JSON with `lw_ppocr_string_free`
 6. `lw_ppocr_destroy`
 
-See [examples/c/main.c](examples/c/main.c), [examples/csharp](examples/csharp), and [examples/python/ocr.py](examples/python/ocr.py). See [docs/C-ABI.md](docs/C-ABI.md) for the C ABI v1 compatibility rules and [docs/MODEL-MANIFEST.md](docs/MODEL-MANIFEST.md) for the frozen Schema v1 fields, validation, and upgrade rules.
+See [examples/c/main.c](examples/c/main.c), [examples/csharp](examples/csharp), and [examples/python/ocr.py](examples/python/ocr.py). See [docs/C-ABI.md](docs/C-ABI.md) for the C ABI v1 compatibility rules, [docs/MODEL-MANIFEST.md](docs/MODEL-MANIFEST.md) for model Schema v1, and [docs/CONTRACTS.md](docs/CONTRACTS.md) for the frozen HTTP/configuration/log contracts.
 
 The C# example targets .NET 8 and calls the same native C ABI on Windows or Linux:
 
@@ -186,7 +187,15 @@ cmake --install build --config Release --prefix dist/package
 
 CI artifacts are assembled for immediate use after extraction. They include the OCR runtime, OpenCV, models, configuration, web assets, and examples. Windows also bundles the VC143 x64 runtime. Linux bundles `libstdc++.so.6` and `libgcc_s.so.1`, while image-codec dependencies are linked into OpenCV statically. glibc, the Linux ELF loader, Windows system DLLs, and macOS system frameworks remain platform dependencies, so the target still needs to match the documented OS and architecture baseline.
 
-Linux and macOS CI save OpenCV only after a successful build and install, while Windows CI caches the extracted official prebuilt package. All four native workflows verify model SHA-256 values, frozen C ABI exports, golden OCR correctness, unit tests, HTTP smoke behavior, varied-image concurrency, malformed requests, and RSS growth. The Linux ARM64 workflow additionally verifies AArch64 ELF files and the maximum required GLIBC symbol version. The Windows workflow runs 5,000 stability iterations nightly and 64 iterations on regular changes. The Docker workflow separately validates non-root execution, Compose, health checks, API Key enforcement, and binary OCR; it publishes the GHCR image only for a formal `v*` tag. Release attachments include SHA-256 checksums.
+Linux and macOS CI save OpenCV only after a successful build and install, while Windows CI caches the extracted official prebuilt package. All four native workflows verify model SHA-256 values, frozen contracts, the dependency lock, C ABI exports, golden OCR correctness, unit tests, HTTP behavior, varied-image concurrency, malformed requests, and RSS growth; Linux also runs ASan/UBSan. The Linux ARM64 workflow additionally verifies AArch64 ELF files and the maximum required GLIBC symbol version. The Windows workflow runs 5,000 stability iterations nightly and 64 iterations on regular changes. Docker CI validates non-root execution, Compose, health checks, API Key enforcement, and binary OCR. Formal `v*` tags publish the GHCR image. Release attachments include SHA-256 checksums, and packages include the dependency lock, contract schemas, and CycloneDX SBOM.
+
+## Quality, security, and compatibility documents
+
+- [Compatibility matrix](docs/COMPATIBILITY.md)
+- [Frozen v1 contracts](docs/CONTRACTS.md)
+- [Testing strategy and local commands](docs/TESTING.md)
+- [Dependency lock, SBOM, and supply-chain controls](docs/SUPPLY-CHAIN.md)
+- [Security reporting policy](SECURITY.md)
 
 ## Concurrency
 

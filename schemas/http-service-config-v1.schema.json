@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lxw112190/lw.PPOCR.OpenCVDNN/v0.6.0/schemas/http-service-config-v1.schema.json",
+  "title": "lw.PPOCR.OpenCVDNN HTTP service configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "$schema": {"type": "string", "minLength": 1},
+    "schema_version": {"const": 1},
+    "listen_host": {"type": "string", "minLength": 1},
+    "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "model_manifest": {"type": "string", "minLength": 1},
+    "web_root": {"type": "string", "minLength": 1},
+    "api_key": {"type": "string"},
+    "enable_classifier": {"type": "boolean"},
+    "limit_side_len": {"type": "integer", "minimum": 32, "maximum": 10000},
+    "det_db_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "det_db_box_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "det_db_unclip_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 10},
+    "det_use_dilation": {"type": "boolean"},
+    "cls_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "cls_batch_size": {"type": "integer", "minimum": 1, "maximum": 256},
+    "rec_batch_size": {"type": "integer", "minimum": 1, "maximum": 256},
+    "rec_concurrency": {"type": "integer", "minimum": 1, "maximum": 32},
+    "engine_instances": {"type": "integer", "minimum": 1, "maximum": 32},
+    "worker_threads": {"type": "integer", "minimum": 1, "maximum": 128},
+    "max_request_bytes": {"type": "integer", "minimum": 1024, "maximum": 268435456},
+    "max_image_pixels": {"type": "integer", "minimum": 1, "maximum": 200000000},
+    "logging": {"$ref": "#/$defs/logging"}
+  },
+  "$defs": {
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "level": {"enum": ["trace", "debug", "info", "warn", "warning", "error", "critical", "off"]},
+        "console": {"type": "boolean"},
+        "file_enabled": {"type": "boolean"},
+        "file_path": {"type": "string", "minLength": 1},
+        "request_enabled": {"type": "boolean"},
+        "request_start_enabled": {"type": "boolean"},
+        "access_file_enabled": {"type": "boolean"},
+        "access_file_path": {"type": "string", "minLength": 1},
+        "access_format": {"enum": ["text", "jsonl"]},
+        "flush_interval_seconds": {"type": "integer", "minimum": 1, "maximum": 60},
+        "trusted_proxies": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {"type": "string", "minLength": 1, "maxLength": 64},
+          "uniqueItems": true
+        },
+        "max_file_size_mb": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "max_files": {"type": "integer", "minimum": 1, "maximum": 100}
+      }
+    }
+  }
+}

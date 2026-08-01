@@ -1,0 +1,117 @@
+{
+  "lock_version": 1,
+  "release_opencv_version": "5.0.0",
+  "components": [
+    {
+      "bom_ref": "pkg:github/yhirose/cpp-httplib@0.49.0",
+      "type": "library",
+      "name": "cpp-httplib",
+      "version": "0.49.0",
+      "license": "MIT",
+      "purl": "pkg:github/yhirose/cpp-httplib@0.49.0",
+      "source_url": "https://github.com/yhirose/cpp-httplib",
+      "paths": ["third_party/cpp-httplib"],
+      "tree_sha256": "11652ba436bc992adab170147d0f673bfb7d6a03df5906b0b299a6bd78002f13",
+      "license_file": "licenses/cpp-httplib-MIT.txt",
+      "version_markers": [
+        {"file": "third_party/cpp-httplib/httplib.h", "contains": "#define CPPHTTPLIB_VERSION \"0.49.0\""}
+      ]
+    },
+    {
+      "bom_ref": "pkg:github/nlohmann/json@3.12.0",
+      "type": "library",
+      "name": "nlohmann-json",
+      "version": "3.12.0",
+      "license": "MIT",
+      "purl": "pkg:github/nlohmann/json@3.12.0",
+      "source_url": "https://github.com/nlohmann/json",
+      "paths": ["third_party/nlohmann-json"],
+      "tree_sha256": "7f102db2e233f29c359f4a15fdc88423cd90d078d54bf0b4cc3bf769c752de9b",
+      "license_file": "licenses/nlohmann-json-MIT.txt",
+      "version_markers": [
+        {"file": "third_party/nlohmann-json/json.hpp", "contains": "#define NLOHMANN_JSON_VERSION_MAJOR 3"},
+        {"file": "third_party/nlohmann-json/json.hpp", "contains": "#define NLOHMANN_JSON_VERSION_MINOR 12"},
+        {"file": "third_party/nlohmann-json/json.hpp", "contains": "#define NLOHMANN_JSON_VERSION_PATCH 0"}
+      ]
+    },
+    {
+      "bom_ref": "pkg:github/gabime/spdlog@1.17.0",
+      "type": "library",
+      "name": "spdlog",
+      "version": "1.17.0",
+      "license": "MIT",
+      "purl": "pkg:github/gabime/spdlog@1.17.0",
+      "source_url": "https://github.com/gabime/spdlog",
+      "paths": ["third_party/spdlog/include/spdlog"],
+      "tree_sha256": "2a9de80d5c597fe16fd902e951732418163126ba6db8a7b2fc113cef93b9fde4",
+      "license_file": "licenses/spdlog-MIT.txt",
+      "version_markers": [
+        {"file": "third_party/spdlog/include/spdlog/version.h", "contains": "#define SPDLOG_VER_MAJOR 1"},
+        {"file": "third_party/spdlog/include/spdlog/version.h", "contains": "#define SPDLOG_VER_MINOR 17"},
+        {"file": "third_party/spdlog/include/spdlog/version.h", "contains": "#define SPDLOG_VER_PATCH 0"}
+      ]
+    },
+    {
+      "bom_ref": "pkg:github/fmtlib/fmt@12.1.0",
+      "type": "library",
+      "name": "fmt",
+      "version": "12.1.0",
+      "license": "BSD-2-Clause",
+      "purl": "pkg:github/fmtlib/fmt@12.1.0",
+      "source_url": "https://github.com/fmtlib/fmt",
+      "paths": ["third_party/spdlog/include/spdlog/fmt/bundled"],
+      "tree_sha256": "2595a37bb64e930ac5b12eecdd8c6a264c1987937be3fca5376e80d9415a923b",
+      "license_file": "licenses/fmt-BSD.txt",
+      "version_markers": [
+        {"file": "third_party/spdlog/include/spdlog/fmt/bundled/base.h", "contains": "#define FMT_VERSION 120100"}
+      ]
+    },
+    {
+      "bom_ref": "pkg:generic/clipper@6.4.2",
+      "type": "library",
+      "name": "Clipper",
+      "version": "6.4.2",
+      "license": "BSL-1.0",
+      "purl": "pkg:generic/clipper@6.4.2",
+      "source_url": "http://www.angusj.com/delphi/clipper.php",
+      "paths": ["third_party/clipper"],
+      "tree_sha256": "44974a3db57967664604d79930dd168abbcb3705b4a55c29a5e373429968cdac",
+      "license_file": "licenses/clipper-BSL-1.0.txt",
+      "version_markers": [
+        {"file": "third_party/clipper/clipper.h", "contains": "#define CLIPPER_VERSION \"6.4.2\""}
+      ]
+    },
+    {
+      "bom_ref": "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+      "type": "machine-learning-model",
+      "name": "PP-OCRv6 Tiny Chinese models",
+      "version": "6",
+      "license": "Apache-2.0",
+      "purl": "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+      "source_url": "https://github.com/PaddlePaddle/PaddleOCR",
+      "paths": ["models/ppocrv6-tiny"],
+      "tree_sha256": "b8bdc49bb463bc601cac13b31c907508afe90df4b1eb07561ad9388f85713c9e",
+      "license_file": "licenses/PaddleOCR-models-APACHE-2.0.txt",
+      "version_markers": [
+        {"file": "models/ppocrv6-tiny/model.json", "contains": "\"schema_version\": 1"},
+        {"file": "models/ppocrv6-tiny/model.json", "contains": "\"family\": \"PP-OCRv6\""}
+      ]
+    },
+    {
+      "bom_ref": "pkg:generic/opencv@5.0.0",
+      "type": "library",
+      "name": "OpenCV",
+      "version": "5.0.0",
+      "license": "Apache-2.0",
+      "purl": "pkg:generic/opencv@5.0.0",
+      "source_url": "https://github.com/opencv/opencv",
+      "source_commit": "40738fb16ceddb5fb3fea747585f7ce6abb0605b",
+      "source_archive_sha256": "b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095",
+      "windows_archive_sha256": "9c6c1fcea58acdf06edba13148b2246e00c2658143fa51e61ecd370db8c39f63",
+      "paths": [],
+      "tree_sha256": null,
+      "license_file": "licenses/opencv-APACHE-2.0.txt",
+      "version_markers": []
+    }
+  ]
+}

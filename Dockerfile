@@ -5,6 +5,7 @@ FROM ubuntu:${UBUNTU_VERSION} AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG OPENCV_VERSION=5.0.0
+ARG OPENCV_SOURCE_SHA256=b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
 ARG TARGETARCH
 
 RUN if [ -n "${TARGETARCH}" ] && [ "${TARGETARCH}" != "amd64" ]; then \
@@ -18,8 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN mkdir -p /tmp/opencv-source /tmp/opencv-build /opt/opencv && \
     curl --fail --location --retry 5 --retry-delay 5 --retry-connrefused \
-      "https://github.com/opencv/opencv/archive/refs/tags/${OPENCV_VERSION}.tar.gz" \
+      "https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz" \
       --output /tmp/opencv.tar.gz && \
+    echo "${OPENCV_SOURCE_SHA256}  /tmp/opencv.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/opencv.tar.gz --strip-components=1 \
       -C /tmp/opencv-source && \
     cmake -S /tmp/opencv-source -B /tmp/opencv-build -G Ninja \
@@ -62,7 +64,7 @@ RUN python3 scripts/validate_model_manifest.py \
 
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
-ARG VERSION=0.4.0
+ARG VERSION=0.7.0
 LABEL org.opencontainers.image.title="lw.PPOCR.OpenCVDNN" \
       org.opencontainers.image.description="Cross-platform PP-OCR HTTP service powered by OpenCV DNN" \
       org.opencontainers.image.version="${VERSION}" \

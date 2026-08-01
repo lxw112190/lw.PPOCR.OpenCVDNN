@@ -20,7 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 0.4.0
+  PACKAGE_VERSION: 0.7.0
+  OPENCV_WINDOWS_SHA256: 9c6c1fcea58acdf06edba13148b2246e00c2658143fa51e61ecd370db8c39f63
 
 jobs:
   windows-x64:
@@ -33,7 +34,11 @@ jobs:
         run: |
           @("scripts/package_windows.ps1", "scripts/http_smoke.py", `
             "scripts/http_stress.py", "scripts/ocr_regression.py", `
-            "scripts/logging_smoke.py", "scripts/check_abi.py", `
+            "scripts/http_invalid_inputs.py", "scripts/http_contract_test.py", `
+            "scripts/config_contract_test.py", `
+            "scripts/logging_smoke.py", "scripts/json_schema.py", `
+            "scripts/check_abi.py", "scripts/validate_contracts.py", `
+            "scripts/dependency_tools.py", "scripts/validate_dependencies.py", `
             "scripts/validate_model_manifest.py") | ForEach-Object {
             if (-not (Test-Path -LiteralPath $_ -PathType Leaf)) {
               throw "Required repository script is missing: $_"
@@ -41,6 +46,8 @@ jobs:
           }
           python scripts/validate_model_manifest.py `
             --manifest models/ppocrv6-tiny/model.json --require-sha256
+          python scripts/validate_contracts.py
+          python scripts/validate_dependencies.py
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -58,7 +65,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ${{ runner.temp }}/opencv
-          key: opencv-5.0.0-windows-x64-prebuilt-v1
+          key: opencv-5.0.0-windows-x64-prebuilt-v2-9c6c1fce
 
       - name: Download and extract OpenCV
         if: steps.opencv-cache.outputs.cache-hit != 'true'
@@ -69,6 +76,10 @@ jobs:
           curl.exe -L --fail --show-error --retry 5 --retry-delay 10 `
             --output $archive $url
           if ($LASTEXITCODE -ne 0) { throw "OpenCV download failed" }
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+          if ($actual -ne $env:OPENCV_WINDOWS_SHA256) {
+            throw "OpenCV archive SHA-256 mismatch: $actual"
+          }
           New-Item -ItemType Directory -Path "${{ runner.temp }}/opencv" -Force | Out-Null
           7z x $archive "-o${{ runner.temp }}/opencv" -y
           if ($LASTEXITCODE -ne 0) { throw "OpenCV extraction failed" }
@@ -113,6 +124,12 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           $package = "dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-windows-x64"
+          @("dependencies.lock.json", "sbom/lw.PPOCR.OpenCVDNN.cdx.json", `
+            "schemas/http-api-v1.openapi.json") | ForEach-Object {
+            if (-not (Test-Path -LiteralPath (Join-Path $package $_) -PathType Leaf)) {
+              throw "Missing release metadata: $_"
+            }
+          }
           @("install-service.bat", "uninstall-service.bat", "start-service.bat", `
             "stop-service.bat", "restart-service.bat") | ForEach-Object {
               if (-not (Test-Path (Join-Path $package $_))) {
@@ -124,12 +141,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed" }
           python scripts/validate_model_manifest.py `
             --manifest "$package/models/ppocrv6-tiny/model.json" --require-sha256
+          python scripts/config_contract_test.py --package-dir $package
           python scripts/http_smoke.py --package-dir $package --port 18787
-          python scripts/logging_smoke.py --package-dir $package --port 18785
+          python scripts/logging_smoke.py --package-dir $package --port 18785 `
+            --access-format jsonl
           python scripts/logging_smoke.py --package-dir $package --port 18783 `
             --access-format text
           python scripts/ocr_regression.py --package-dir $package `
             --cases tests/regression/ppocrv6-tiny.json --port 18786
+          python scripts/http_invalid_inputs.py --package-dir $package `
+            --port 18784
+          python scripts/http_contract_test.py --package-dir $package `
+            --port 18782
           python scripts/check_abi.py `
             --library "$package/lw.PPOCR.OpenCVDNN.dll"
           $iterations = 64

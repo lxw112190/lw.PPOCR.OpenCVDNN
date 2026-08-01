@@ -1,0 +1,262 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "bom-ref": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@0.7.0",
+      "name": "lw.PPOCR.OpenCVDNN",
+      "version": "0.7.0",
+      "purl": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@0.7.0"
+    },
+    "properties": [
+      {
+        "name": "lw.ppocr.release_opencv_version",
+        "value": "5.0.0"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:github/yhirose/cpp-httplib@0.49.0",
+      "name": "cpp-httplib",
+      "version": "0.49.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/yhirose/cpp-httplib@0.49.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/yhirose/cpp-httplib"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "11652ba436bc992adab170147d0f673bfb7d6a03df5906b0b299a6bd78002f13"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:github/nlohmann/json@3.12.0",
+      "name": "nlohmann-json",
+      "version": "3.12.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/nlohmann/json@3.12.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/nlohmann/json"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7f102db2e233f29c359f4a15fdc88423cd90d078d54bf0b4cc3bf769c752de9b"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:github/gabime/spdlog@1.17.0",
+      "name": "spdlog",
+      "version": "1.17.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/gabime/spdlog@1.17.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/gabime/spdlog"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2a9de80d5c597fe16fd902e951732418163126ba6db8a7b2fc113cef93b9fde4"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:github/fmtlib/fmt@12.1.0",
+      "name": "fmt",
+      "version": "12.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-2-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:github/fmtlib/fmt@12.1.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/fmtlib/fmt"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2595a37bb64e930ac5b12eecdd8c6a264c1987937be3fca5376e80d9415a923b"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:generic/clipper@6.4.2",
+      "name": "Clipper",
+      "version": "6.4.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSL-1.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/clipper@6.4.2",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "http://www.angusj.com/delphi/clipper.php"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "44974a3db57967664604d79930dd168abbcb3705b4a55c29a5e373429968cdac"
+        }
+      ]
+    },
+    {
+      "type": "machine-learning-model",
+      "bom-ref": "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+      "name": "PP-OCRv6 Tiny Chinese models",
+      "version": "6",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/PaddlePaddle/PaddleOCR"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b8bdc49bb463bc601cac13b31c907508afe90df4b1eb07561ad9388f85713c9e"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:generic/opencv@5.0.0",
+      "name": "OpenCV",
+      "version": "5.0.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/opencv@5.0.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/opencv/opencv"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lw.ppocr.source_commit",
+          "value": "40738fb16ceddb5fb3fea747585f7ce6abb0605b"
+        },
+        {
+          "name": "lw.ppocr.source_archive_sha256",
+          "value": "b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095"
+        },
+        {
+          "name": "lw.ppocr.windows_archive_sha256",
+          "value": "9c6c1fcea58acdf06edba13148b2246e00c2658143fa51e61ecd370db8c39f63"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:github/lxw112190/lw.PPOCR.OpenCVDNN@0.7.0",
+      "dependsOn": [
+        "pkg:github/yhirose/cpp-httplib@0.49.0",
+        "pkg:github/nlohmann/json@3.12.0",
+        "pkg:github/gabime/spdlog@1.17.0",
+        "pkg:github/fmtlib/fmt@12.1.0",
+        "pkg:generic/clipper@6.4.2",
+        "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+        "pkg:generic/opencv@5.0.0"
+      ]
+    },
+    {
+      "ref": "pkg:github/yhirose/cpp-httplib@0.49.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/nlohmann/json@3.12.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:github/gabime/spdlog@1.17.0",
+      "dependsOn": [
+        "pkg:github/fmtlib/fmt@12.1.0"
+      ]
+    },
+    {
+      "ref": "pkg:github/fmtlib/fmt@12.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:generic/clipper@6.4.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:generic/opencv@5.0.0",
+      "dependsOn": []
+    }
+  ]
+}

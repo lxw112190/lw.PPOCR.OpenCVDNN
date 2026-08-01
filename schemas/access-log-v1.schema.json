@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lxw112190/lw.PPOCR.OpenCVDNN/v0.6.0/schemas/access-log-v1.schema.json",
+  "title": "lw.PPOCR.OpenCVDNN JSONL access record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "log_schema_version", "timestamp", "level", "event", "request_id",
+    "remote_ip", "peer_ip", "method", "path", "operation",
+    "content_type", "request_format", "status", "request_bytes",
+    "response_bytes", "result_count", "duration_ms"
+  ],
+  "properties": {
+    "log_schema_version": {"const": 1},
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "level": {"const": "info"},
+    "event": {"const": "request_complete"},
+    "request_id": {"type": "string", "minLength": 1},
+    "remote_ip": {"type": "string", "minLength": 1, "maxLength": 64},
+    "peer_ip": {"type": "string", "minLength": 1, "maxLength": 64},
+    "method": {"type": "string", "minLength": 1},
+    "path": {"enum": ["/api/ocr", "/api/recognize"]},
+    "operation": {"enum": ["ocr", "recognize", "recognize_batch"]},
+    "content_type": {"type": "string"},
+    "request_format": {"enum": ["binary", "json"]},
+    "status": {"type": "integer", "minimum": 100, "maximum": 599},
+    "request_bytes": {"type": "integer", "minimum": 0},
+    "response_bytes": {"type": "integer", "minimum": 0},
+    "result_count": {"type": "integer", "minimum": 0},
+    "duration_ms": {"type": "number", "minimum": 0},
+    "error_code": {
+      "enum": ["unauthorized", "invalid_json", "invalid_request", "payload_too_large", "internal_error"]
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "image_count": {"type": "integer", "minimum": 1, "maximum": 256},
+    "timing_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server_total"],
+      "properties": {
+        "server_total": {"type": "number", "minimum": 0},
+        "decode": {"type": "number", "minimum": 0},
+        "detector": {"type": "number", "minimum": 0},
+        "classifier": {"type": "number", "minimum": 0},
+        "recognizer": {"type": "number", "minimum": 0},
+        "pipeline": {"type": "number", "minimum": 0}
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@ service, and the browser page.
 
 ### 使用预构建镜像
 
-发布 `v0.4.0` 后，可直接运行 GitHub Container Registry 镜像：
+发布 `v0.7.0` 后，可直接运行 GitHub Container Registry 镜像：
 
 ```bash
 docker run -d \
@@ -16,7 +16,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8787:8787 \
   -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0
 ```
 
 访问 <http://127.0.0.1:8787/>。查看状态和日志：
@@ -41,7 +41,7 @@ docker compose logs -f ppocr
 
 ```bash
 docker build --platform linux/amd64 \
-  -t ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0 .
+  -t ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0 .
 docker compose up -d
 ```
 
@@ -84,7 +84,7 @@ API Key 不会写入启动输出或请求日志。启动输出只显示
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `PPOCR_IMAGE` | `ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0` | 镜像名称和标签 |
+| `PPOCR_IMAGE` | `ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0` | 镜像名称和标签 |
 | `PPOCR_PORT` | `8787` | 宿主机映射端口 |
 | `PPOCR_API_KEY` | 空 | 空值表示不启用认证 |
 | `PPOCR_ENGINE_INSTANCES` | `1` | 独立模型实例数量，增加后会显著增加内存 |
@@ -100,7 +100,7 @@ API Key 不会写入启动输出或请求日志。启动输出只显示
 
 ### Prebuilt image
 
-After the `v0.4.0` image is published:
+After the `v0.7.0` image is published:
 
 ```bash
 docker run -d \
@@ -108,7 +108,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8787:8787 \
   -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0
 ```
 
 Open <http://127.0.0.1:8787/>. The container runs as the non-root UID/GID
@@ -145,7 +145,7 @@ The same variables can be applied directly to the native HTTP executable:
 | `LW_PPOCR_REQUEST_LOGGING_ENABLED` | OCR access-record master switch |
 | `LW_PPOCR_REQUEST_START_LOGGING_ENABLED` | Pre-inference runtime breadcrumb switch |
 | `LW_PPOCR_ACCESS_FILE_LOGGING_ENABLED`, `LW_PPOCR_ACCESS_LOG_FILE` | Access rotating-file switch and path |
-| `LW_PPOCR_ACCESS_LOG_FORMAT` | Access format: `jsonl` or `text` |
+| `LW_PPOCR_ACCESS_LOG_FORMAT` | Access format: `text` (default) or `jsonl` |
 | `LW_PPOCR_LOG_FLUSH_INTERVAL_SECONDS` | Periodic flush interval, 1–60 seconds |
 | `LW_PPOCR_TRUSTED_PROXIES` | Comma-separated exact proxy IPs trusted for `X-Forwarded-For` |
 

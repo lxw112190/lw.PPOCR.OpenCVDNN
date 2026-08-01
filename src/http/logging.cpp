@@ -19,7 +19,7 @@ std::shared_ptr<spdlog::logger> g_runtime_logger;
 std::shared_ptr<spdlog::logger> g_access_logger;
 bool g_request_logging = false;
 bool g_request_start_logging = false;
-AccessLogFormat g_access_format = AccessLogFormat::JsonLines;
+AccessLogFormat g_access_format = AccessLogFormat::Text;
 
 spdlog::level::level_enum ParseLevel(const std::string& value) {
     if (value == "trace") return spdlog::level::trace;

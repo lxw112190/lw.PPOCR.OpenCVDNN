@@ -1,0 +1,9 @@
+{
+  "lock_version": 1,
+  "policy": "Schema v1 files are immutable. Add a versioned v2 file for breaking changes.",
+  "files": {
+    "access-log-v1.schema.json": "ded2b983df0266ede4e35b2bbae5992b6172025a67b52e81e3655ef1c5b31faf",
+    "http-api-v1.openapi.json": "beee6c5a461e022f801614431fda3c72c8811cd78294889f7e0a42336db91df9",
+    "http-service-config-v1.schema.json": "d71cf3735083f7bf03376010a811d3c93ab35921f51df8ab1cfcf74f0f4e3003"
+  }
+}

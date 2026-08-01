@@ -17,7 +17,7 @@ permissions:
   packages: write
 
 env:
-  PACKAGE_VERSION: 0.4.0
+  PACKAGE_VERSION: 0.7.0
   IMAGE_NAME: ghcr.io/lxw112190/lw.ppocr.opencvdnn
 
 jobs:
@@ -29,6 +29,8 @@ jobs:
       - name: Validate Docker files
         run: |
           bash -n scripts/package_docker.sh
+          python3 scripts/validate_contracts.py
+          python3 scripts/validate_dependencies.py
           docker compose -f docker-compose.yml config >/dev/null
 
       - name: Set up Docker Buildx
@@ -58,6 +60,7 @@ jobs:
           build-args: |
             VERSION=${{ env.PACKAGE_VERSION }}
             OPENCV_VERSION=5.0.0
+            OPENCV_SOURCE_SHA256=b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -96,6 +99,14 @@ jobs:
             --data-binary @models/ppocrv6-tiny/sample.jpg \
             http://127.0.0.1:18789/api/ocr)"
           test "$status" = "401"
+          python3 - <<'PY'
+          import json
+          with open('/tmp/unauthorized.json', encoding='utf-8') as stream:
+              error = json.load(stream)
+          assert error['ok'] is False
+          assert error['error_code'] == 'unauthorized'
+          assert error['request_id']
+          PY
 
           curl --fail --silent --show-error \
             -H 'X-API-Key: ci-secret-value' \

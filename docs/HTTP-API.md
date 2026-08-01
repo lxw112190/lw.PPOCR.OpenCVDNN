@@ -1,5 +1,8 @@
 # HTTP API
 
+HTTP API v1 is frozen in `schemas/http-api-v1.openapi.json`. Every JSON response
+includes `X-LW-PPOCR-API-Version: 1`.
+
 All OCR responses include an `X-Request-ID` header. The same value is present
 in the JSON `request_id` field and can be used to locate the corresponding
 runtime and access logs. `/health` also includes this header.
@@ -99,11 +102,18 @@ roughly 33% size increase and reduces JSON encoding/decoding work.
 | `413` | Request body exceeds `max_request_bytes` |
 | `500` | Model inference or unexpected server error |
 
-Every application-level error is JSON:
+Every application-level error is JSON and includes a stable `error_code`:
 
 ```json
-{"ok":false,"request_id":"...","error":"..."}
+{"ok":false,"request_id":"...","error_code":"invalid_request","error":"..."}
 ```
+
+API v1 defines these error codes: `unauthorized`, `invalid_json`,
+`invalid_request`, `payload_too_large`, and `internal_error`. Clients should use
+`error_code`, not the human-readable `error` text, for control flow.
+
+The complete HTTP/configuration/log compatibility policy is documented in
+[CONTRACTS.md](CONTRACTS.md).
 
 The service deliberately excludes API Keys, request bodies, Base64 image data,
 and recognized text from its logs.

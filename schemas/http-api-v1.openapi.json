@@ -1,0 +1,232 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "lw.PPOCR.OpenCVDNN HTTP API",
+    "version": "1.0.0",
+    "description": "Frozen HTTP API v1. Every JSON response includes X-LW-PPOCR-API-Version: 1."
+  },
+  "x-contract-version": 1,
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Service is ready",
+            "headers": {
+              "X-Request-ID": {"$ref": "#/components/headers/RequestId"},
+              "X-LW-PPOCR-API-Version": {"$ref": "#/components/headers/ApiVersion"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
+          }
+        }
+      }
+    },
+    "/api/ocr": {
+      "post": {
+        "operationId": "ocr",
+        "security": [{"ApiKey": []}, {}],
+        "requestBody": {"required": true, "content": {
+          "application/json": {"schema": {"$ref": "#/components/schemas/SingleImageRequest"}},
+          "application/octet-stream": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/jpeg": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/png": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/bmp": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/webp": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/tiff": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/gif": {"schema": {"type": "string", "contentEncoding": "binary"}}
+        }},
+        "responses": {
+          "200": {"$ref": "#/components/responses/OcrSuccess"},
+          "400": {"$ref": "#/components/responses/Error"},
+          "401": {"$ref": "#/components/responses/Error"},
+          "413": {"$ref": "#/components/responses/Error"},
+          "500": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    },
+    "/api/recognize": {
+      "post": {
+        "operationId": "recognize",
+        "security": [{"ApiKey": []}, {}],
+        "requestBody": {"required": true, "content": {
+          "application/json": {"schema": {"oneOf": [
+            {"$ref": "#/components/schemas/SingleImageRequest"},
+            {"$ref": "#/components/schemas/BatchImageRequest"}
+          ]}},
+          "application/octet-stream": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/jpeg": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/png": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/bmp": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/webp": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/tiff": {"schema": {"type": "string", "contentEncoding": "binary"}},
+          "image/gif": {"schema": {"type": "string", "contentEncoding": "binary"}}
+        }},
+        "responses": {
+          "200": {"$ref": "#/components/responses/RecognitionSuccess"},
+          "400": {"$ref": "#/components/responses/Error"},
+          "401": {"$ref": "#/components/responses/Error"},
+          "413": {"$ref": "#/components/responses/Error"},
+          "500": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {"type": "apiKey", "in": "header", "name": "X-API-Key"}
+    },
+    "headers": {
+      "RequestId": {"schema": {"type": "string", "minLength": 1}},
+      "ApiVersion": {"schema": {"const": "1"}}
+    },
+    "responses": {
+      "OcrSuccess": {
+        "description": "Full OCR result",
+        "headers": {
+          "X-Request-ID": {"$ref": "#/components/headers/RequestId"},
+          "X-LW-PPOCR-API-Version": {"$ref": "#/components/headers/ApiVersion"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OcrResponse"}}}
+      },
+      "RecognitionSuccess": {
+        "description": "Single or batch recognition result",
+        "headers": {
+          "X-Request-ID": {"$ref": "#/components/headers/RequestId"},
+          "X-LW-PPOCR-API-Version": {"$ref": "#/components/headers/ApiVersion"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RecognitionResponse"}}}
+      },
+      "Error": {
+        "description": "Stable error response",
+        "headers": {
+          "X-Request-ID": {"$ref": "#/components/headers/RequestId"},
+          "X-LW-PPOCR-API-Version": {"$ref": "#/components/headers/ApiVersion"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      }
+    },
+    "schemas": {
+      "SingleImageRequest": {
+        "type": "object", "additionalProperties": false,
+        "required": ["image_base64"],
+        "properties": {"image_base64": {"type": "string", "minLength": 1}}
+      },
+      "BatchImageRequest": {
+        "type": "object", "additionalProperties": false,
+        "required": ["images_base64"],
+        "properties": {"images_base64": {
+          "type": "array", "minItems": 1, "maxItems": 256,
+          "items": {"type": "string", "minLength": 1}
+        }}
+      },
+      "HealthResponse": {
+        "type": "object", "additionalProperties": false,
+        "required": ["ok", "status", "request_id", "product", "version", "backend", "backend_name", "api_key_required", "project_url", "author"],
+        "properties": {
+          "ok": {"const": true}, "status": {"const": "ready"},
+          "request_id": {"type": "string", "minLength": 1},
+          "product": {"const": "lw.PPOCR.OpenCVDNN"},
+          "version": {"type": "string", "minLength": 1},
+          "backend": {"const": "opencv-dnn"},
+          "backend_name": {"const": "OpenCV DNN CPU"},
+          "api_key_required": {"type": "boolean"},
+          "project_url": {"type": "string", "format": "uri"},
+          "author": {"type": "string", "minLength": 1}
+        }
+      },
+      "ImageInfo": {
+        "type": "object", "additionalProperties": false,
+        "required": ["width", "height"],
+        "properties": {
+          "width": {"type": "integer", "minimum": 1},
+          "height": {"type": "integer", "minimum": 1}
+        }
+      },
+      "StageTiming": {
+        "type": "object", "additionalProperties": false,
+        "required": ["preprocess_ms", "inference_ms", "postprocess_ms", "total_ms"],
+        "properties": {
+          "preprocess_ms": {"type": "number", "minimum": 0},
+          "inference_ms": {"type": "number", "minimum": 0},
+          "postprocess_ms": {"type": "number", "minimum": 0},
+          "total_ms": {"type": "number", "minimum": 0}
+        }
+      },
+      "OcrTiming": {
+        "type": "object", "additionalProperties": false,
+        "required": ["decode_ms", "detector", "classifier", "recognizer", "pipeline", "server_total_ms"],
+        "properties": {
+          "decode_ms": {"type": "number", "minimum": 0},
+          "detector": {"$ref": "#/components/schemas/StageTiming"},
+          "classifier": {"$ref": "#/components/schemas/StageTiming"},
+          "recognizer": {"$ref": "#/components/schemas/StageTiming"},
+          "pipeline": {"$ref": "#/components/schemas/StageTiming"},
+          "server_total_ms": {"type": "number", "minimum": 0}
+        }
+      },
+      "RecognitionTiming": {
+        "type": "object", "additionalProperties": false,
+        "required": ["decode_ms", "classifier", "recognizer", "pipeline", "server_total_ms"],
+        "properties": {
+          "decode_ms": {"type": "number", "minimum": 0},
+          "classifier": {"$ref": "#/components/schemas/StageTiming"},
+          "recognizer": {"$ref": "#/components/schemas/StageTiming"},
+          "pipeline": {"$ref": "#/components/schemas/StageTiming"},
+          "server_total_ms": {"type": "number", "minimum": 0}
+        }
+      },
+      "OcrItem": {
+        "type": "object", "additionalProperties": false,
+        "required": ["text", "score", "cls_label", "cls_score", "x1", "y1", "x2", "y2", "x3", "y3", "x4", "y4"],
+        "properties": {
+          "text": {"type": "string"}, "score": {"type": "number", "minimum": 0, "maximum": 1},
+          "cls_label": {"type": "integer"}, "cls_score": {"type": "number", "minimum": 0, "maximum": 1},
+          "x1": {"type": "number"}, "y1": {"type": "number"},
+          "x2": {"type": "number"}, "y2": {"type": "number"},
+          "x3": {"type": "number"}, "y3": {"type": "number"},
+          "x4": {"type": "number"}, "y4": {"type": "number"}
+        }
+      },
+      "RecognitionItem": {
+        "type": "object", "additionalProperties": false,
+        "required": ["source_index", "text", "score", "cls_label", "cls_score"],
+        "properties": {
+          "source_index": {"type": "integer", "minimum": 0, "maximum": 255},
+          "text": {"type": "string"}, "score": {"type": "number", "minimum": 0, "maximum": 1},
+          "cls_label": {"type": "integer"}, "cls_score": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "OcrResponse": {
+        "type": "object", "additionalProperties": false,
+        "required": ["ok", "request_id", "backend", "image", "result", "timing"],
+        "properties": {
+          "ok": {"const": true}, "request_id": {"type": "string", "minLength": 1},
+          "backend": {"const": "opencv-dnn"}, "image": {"$ref": "#/components/schemas/ImageInfo"},
+          "result": {"type": "array", "items": {"$ref": "#/components/schemas/OcrItem"}},
+          "timing": {"$ref": "#/components/schemas/OcrTiming"}
+        }
+      },
+      "RecognitionResponse": {
+        "type": "object", "additionalProperties": false,
+        "required": ["ok", "request_id", "backend", "result", "timing"],
+        "properties": {
+          "ok": {"const": true}, "request_id": {"type": "string", "minLength": 1},
+          "backend": {"const": "opencv-dnn"},
+          "image_count": {"type": "integer", "minimum": 1, "maximum": 256},
+          "result": {"type": "array", "minItems": 1, "maxItems": 256, "items": {"$ref": "#/components/schemas/RecognitionItem"}},
+          "timing": {"$ref": "#/components/schemas/RecognitionTiming"}
+        }
+      },
+      "ErrorResponse": {
+        "type": "object", "additionalProperties": false,
+        "required": ["ok", "request_id", "error_code", "error"],
+        "properties": {
+          "ok": {"const": false}, "request_id": {"type": "string", "minLength": 1},
+          "error_code": {"enum": ["unauthorized", "invalid_json", "invalid_request", "payload_too_large", "internal_error"]},
+          "error": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

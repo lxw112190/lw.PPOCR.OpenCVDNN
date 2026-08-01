@@ -1,0 +1,87 @@
+name: Security and supply chain
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 19 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PACKAGE_VERSION: 0.7.0
+
+jobs:
+  supply-chain:
+    name: Dependency lock, contracts, and SBOM
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate frozen inputs
+        run: |
+          python3 -m py_compile scripts/dependency_tools.py \
+            scripts/validate_dependencies.py scripts/generate_sbom.py \
+            scripts/json_schema.py scripts/validate_contracts.py
+          python3 scripts/validate_dependencies.py
+          python3 scripts/validate_contracts.py
+          python3 scripts/validate_model_manifest.py \
+            --manifest models/ppocrv6-tiny/model.json --require-sha256
+
+      - name: Verify committed CycloneDX SBOM
+        run: |
+          python3 scripts/generate_sbom.py --version "$PACKAGE_VERSION" \
+            --output build/lw.PPOCR.OpenCVDNN.cdx.json
+          cmp sbom/lw.PPOCR.OpenCVDNN.cdx.json \
+            build/lw.PPOCR.OpenCVDNN.cdx.json
+
+      - uses: actions/dependency-review-action@v4
+        if: github.event_name == 'pull_request'
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-sbom
+          path: sbom/lw.PPOCR.OpenCVDNN.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+  codeql:
+    name: CodeQL C/C++
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libopencv-dev ninja-build
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: c-cpp
+          build-mode: manual
+          config-file: ./.github/codeql-config.yml
+
+      - name: Build analyzed targets
+        run: |
+          cmake -S . -B build/codeql -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build/codeql --parallel 2
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:c-cpp"

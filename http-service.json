@@ -1,4 +1,6 @@
 {
+  "$schema": "schemas/http-service-config-v1.schema.json",
+  "schema_version": 1,
   "listen_host": "127.0.0.1",
   "port": 8787,
   "model_manifest": "models/ppocrv6-tiny/model.json",
@@ -28,7 +30,7 @@
     "request_start_enabled": true,
     "access_file_enabled": true,
     "access_file_path": "logs/access.log",
-    "access_format": "jsonl",
+    "access_format": "text",
     "flush_interval_seconds": 1,
     "trusted_proxies": [],
     "max_file_size_mb": 10,

@@ -6,7 +6,7 @@
 
 当前内置模型为 PP-OCRv6 Tiny Chinese，推理设备为 CPU。项目不依赖 Paddle Runtime、ONNX Runtime、DirectML、OpenVINO 或 TensorRT。
 
-> 当前版本：`v0.4.0`。C ABI v1 与模型清单 Schema v1 保持冻结，本版重点升级生产日志与请求诊断。
+> 当前开发版本：`v0.7.0`。C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与日志 Schema v1 均已冻结；本版完成正确性、安全性与供应链发布门禁。
 
 ## 主要能力
 
@@ -19,8 +19,9 @@
 - 可选 API Key；运行日志和请求日志可分别开关。
 - Nginx 风格日志治理：runtime/access 分离、JSON Lines、请求 ID、阶段耗时、可信代理与隐私保护。
 - Docker / Docker Compose：Linux x64 非 root 镜像、健康检查、持久化日志和 GHCR 发布。
-- 正确性回归：固定样图、文字顺序、方向分类、置信度与检测框容差均有黄金基线。
-- 接口契约：C ABI v1 导出符号、结构布局与模型清单 Schema v1 自动防回退。
+- 正确性与健壮性回归：固定样图、文字顺序、方向分类、置信度、检测框、批量顺序、异常输入恢复、ASan/UBSan 与长时间内存增长均有自动门禁。
+- 接口契约：C ABI v1、模型清单 Schema v1、HTTP API v1、配置 Schema v1 与 JSONL 日志 Schema v1 自动防回退。
+- 供应链：依赖与模型哈希锁定、CycloneDX 1.6 SBOM、CodeQL、PR 依赖审查和 Dependabot。
 - Windows x64、Linux x64、Linux ARM64（统信 UOS 20 兼容基线）、macOS ARM64 CI；核心代码不包含平台专用推理逻辑。
 
 ## 快速使用 HTTP 服务
@@ -55,12 +56,12 @@ chmod +x run-http-service.sh
 
 ### Docker / Docker Compose
 
-`v0.4.0` 提供 `linux/amd64` 容器镜像。发布后可直接运行：
+`v0.7.0` 提供 `linux/amd64` 容器镜像。发布后可直接运行：
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.7.0
 ```
 
 使用 Compose：
@@ -131,7 +132,7 @@ curl http://127.0.0.1:8787/api/recognize \
 
 二进制单图请求接受 `image/*` 或 `application/octet-stream`。批量识别仍使用 JSON/Base64；`image_base64` 既可以是纯 Base64，也可以是浏览器产生的 `data:image/png;base64,...`。测试网页默认使用二进制接口。
 
-完整请求、响应和状态码说明见 [docs/HTTP-API.md](docs/HTTP-API.md)。
+完整请求、响应和状态码说明见 [docs/HTTP-API.md](docs/HTTP-API.md)。HTTP JSON 响应固定返回 `X-LW-PPOCR-API-Version: 1`；程序应依据稳定的 `error_code` 处理错误，不应解析可能优化的可读 `error` 文本。
 
 ### API Key
 
@@ -189,7 +190,7 @@ X-API-Key: replace-with-a-long-random-secret
 5. 用 `lw_ppocr_string_free` 释放 JSON
 6. `lw_ppocr_destroy`
 
-完整示例见 [examples/c/main.c](examples/c/main.c)、[examples/csharp](examples/csharp) 和 [examples/python/ocr.py](examples/python/ocr.py)。C ABI v1 的兼容规则见 [docs/C-ABI.md](docs/C-ABI.md)，模型清单 Schema v1 的字段、校验与升级规则见 [docs/MODEL-MANIFEST.md](docs/MODEL-MANIFEST.md)。
+完整示例见 [examples/c/main.c](examples/c/main.c)、[examples/csharp](examples/csharp) 和 [examples/python/ocr.py](examples/python/ocr.py)。C ABI v1 的兼容规则见 [docs/C-ABI.md](docs/C-ABI.md)，模型清单 Schema v1 的字段、校验与升级规则见 [docs/MODEL-MANIFEST.md](docs/MODEL-MANIFEST.md)，HTTP/配置/日志冻结规则见 [docs/CONTRACTS.md](docs/CONTRACTS.md)。
 
 C# 示例使用 .NET 8，通过同一套 C ABI 在 Windows/Linux 上调用：
 
@@ -216,7 +217,15 @@ cmake --install build --config Release --prefix dist/package
 
 Windows 使用 DLL，Linux 使用 `.so`，macOS 使用 `.dylib`。CI 发布包按“解压即可运行”整理：包含 OCR Runtime、OpenCV、模型、配置、网页和示例；Windows 额外包含 VC143 x64 运行库，Linux 额外包含 `libstdc++.so.6` 与 `libgcc_s.so.1`，图像编解码依赖静态编入 OpenCV。glibc、Linux 动态加载器、Windows 系统 DLL 和 macOS 系统框架不随包分发，目标机仍需满足发布包标注的系统与架构基线。
 
-Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。四套原生工作流都会执行单元测试、模型文件 SHA-256、C ABI 导出、黄金正确性回归、HTTP 冒烟测试，以及多尺寸图片并发、异常请求和 RSS 内存增长测试。Linux ARM64 工作流还会验证 AArch64 ELF 与最高 GLIBC 符号版本。Windows 工作流每天定时执行 5000 次长测，普通提交执行 64 次快速稳定性检查。Docker 工作流额外验证非 root 运行、Compose、健康检查、API Key 和二进制 OCR；推送正式 `v*` 标签时才会发布 GHCR 镜像。所有发布附件均包含 SHA-256 校验文件。
+Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。四套原生工作流都会执行单元测试、模型文件 SHA-256、冻结契约、依赖锁、C ABI 导出、黄金正确性回归、HTTP 冒烟测试，以及多尺寸图片并发、异常请求和 RSS 内存增长测试；Linux 额外执行 ASan/UBSan。Linux ARM64 工作流还会验证 AArch64 ELF 与最高 GLIBC 符号版本。Windows 工作流每天定时执行 5000 次长测，普通提交执行 64 次快速稳定性检查。Docker 工作流额外验证非 root 运行、Compose、健康检查、API Key 和二进制 OCR；推送正式 `v*` 标签时才会发布 GHCR 镜像。所有发布附件均包含 SHA-256 校验文件，发布包同时携带依赖锁、契约 Schema 和 CycloneDX SBOM。
+
+## 质量、安全与兼容性文档
+
+- [兼容矩阵](docs/COMPATIBILITY.md)
+- [v1 契约冻结规则](docs/CONTRACTS.md)
+- [测试策略与本地命令](docs/TESTING.md)
+- [依赖锁、SBOM 与供应链控制](docs/SUPPLY-CHAIN.md)
+- [安全报告策略](SECURITY.md)
 
 ## 并发建议
 

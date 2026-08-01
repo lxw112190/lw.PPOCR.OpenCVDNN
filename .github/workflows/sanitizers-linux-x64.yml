@@ -1,0 +1,77 @@
+name: Linux x64 Sanitizers
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  asan-ubsan:
+    name: ASan + UBSan + invalid inputs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1:strict_string_checks=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install compiler and OpenCV
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libopencv-dev python3 python3-pip
+          python3 -m pip install --user cmake==3.31.6 ninja==1.11.1.4
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure sanitizer build
+        run: |
+          python3 -m py_compile scripts/http_smoke.py \
+            scripts/http_stress.py scripts/http_invalid_inputs.py \
+            scripts/http_contract_test.py scripts/config_contract_test.py \
+            scripts/ocr_regression.py \
+            scripts/json_schema.py scripts/validate_contracts.py \
+            scripts/dependency_tools.py scripts/validate_dependencies.py
+          python3 scripts/validate_contracts.py
+          python3 scripts/validate_dependencies.py
+          cmake -S . -B build/sanitizers -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DLW_PPOCR_ENABLE_SANITIZERS=ON
+
+      - name: Build and run native tests
+        run: |
+          cmake --build build/sanitizers --parallel 2
+          ctest --test-dir build/sanitizers --output-on-failure
+          build/sanitizers/lw-ppocr-c-example \
+            models/ppocrv6-tiny/model.json \
+            models/ppocrv6-tiny/sample.jpg
+
+      - name: Install sanitizer test package
+        run: |
+          cmake --install build/sanitizers \
+            --prefix build/sanitizer-package
+
+      - name: HTTP, malformed input, and recovery tests
+        run: |
+          python3 scripts/config_contract_test.py \
+            --package-dir build/sanitizer-package
+          python3 scripts/http_smoke.py \
+            --package-dir build/sanitizer-package --port 18827
+          python3 scripts/http_invalid_inputs.py \
+            --package-dir build/sanitizer-package --port 18824
+          python3 scripts/http_stress.py \
+            --package-dir build/sanitizer-package \
+            --iterations 32 --concurrency 2 --port 18828 \
+            --max-rss-growth-mb 256

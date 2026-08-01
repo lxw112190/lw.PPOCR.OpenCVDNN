@@ -14,6 +14,8 @@ import time
 import urllib.error
 import urllib.request
 
+from json_schema import validate
+
 
 def configure_utf8_output() -> None:
     for stream in (sys.stdout, sys.stderr):
@@ -131,6 +133,11 @@ def main() -> int:
         assert len(lines) == 3
         if args.access_format == "jsonl":
             records = [json.loads(line) for line in lines]
+            access_schema = json.loads((
+                package / "schemas/access-log-v1.schema.json").read_text(
+                    encoding="utf-8"))
+            for record in records:
+                validate(record, access_schema)
             assert [record["status"] for record in records] == [200, 401, 400]
             assert all(record["log_schema_version"] == 1 for record in records)
             assert all(record["event"] == "request_complete" for record in records)

@@ -1,0 +1,10 @@
+name: lw.PPOCR.OpenCVDNN CodeQL configuration
+
+queries:
+  - uses: security-and-quality
+
+paths-ignore:
+  - build
+  - dist
+  - tests/fixtures
+  - third_party

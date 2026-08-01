@@ -19,6 +19,7 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -50,6 +51,8 @@ constexpr const char* kAuthor = "天天代码码天天";
 constexpr const char* kQq = "819069052";
 constexpr const char* kProjectUrl =
     "https://github.com/lxw112190/lw.PPOCR.OpenCVDNN";
+constexpr int kConfigSchemaVersion = 1;
+constexpr const char* kHttpApiVersion = "1";
 
 struct ServiceConfig {
     std::string listen_host = "127.0.0.1";
@@ -200,8 +203,28 @@ std::vector<std::string> SplitCommaSeparated(const std::string& value) {
     return values;
 }
 
+void RejectUnknownProperties(
+    const json& object,
+    std::initializer_list<const char*> allowed,
+    const std::string& context) {
+    if (!object.is_object()) {
+        throw std::runtime_error(context + " must be an object");
+    }
+    for (const auto& item : object.items()) {
+        const bool known = std::any_of(allowed.begin(), allowed.end(),
+            [&item](const char* name) { return item.key() == name; });
+        if (!known) {
+            throw std::runtime_error(
+                context + " contains unknown property: " + item.key());
+        }
+    }
+}
+
 void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
     if (const char* value = std::getenv("LW_PPOCR_LISTEN_HOST")) {
+        if (*value == '\0') {
+            throw std::runtime_error("LW_PPOCR_LISTEN_HOST must not be empty");
+        }
         config.listen_host = value;
     }
     const uint64_t port = EnvironmentUnsigned("LW_PPOCR_PORT", config.port);
@@ -210,9 +233,16 @@ void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
     }
     config.port = static_cast<int>(port);
     if (const char* value = std::getenv("LW_PPOCR_MODEL_MANIFEST")) {
+        if (*value == '\0') {
+            throw std::runtime_error(
+                "LW_PPOCR_MODEL_MANIFEST must not be empty");
+        }
         config.model_manifest = ResolvePath(base, value);
     }
     if (const char* value = std::getenv("LW_PPOCR_WEB_ROOT")) {
+        if (*value == '\0') {
+            throw std::runtime_error("LW_PPOCR_WEB_ROOT must not be empty");
+        }
         config.web_root = ResolvePath(base, value);
     }
     if (const char* value = std::getenv("LW_PPOCR_API_KEY")) {
@@ -274,14 +304,45 @@ ServiceConfig LoadConfig(const fs::path& path) {
     if (!document.is_object()) {
         throw std::runtime_error("HTTP service configuration must be an object");
     }
+    RejectUnknownProperties(document, {
+        "$schema", "schema_version", "listen_host", "port",
+        "model_manifest", "web_root", "api_key", "enable_classifier",
+        "limit_side_len", "det_db_threshold", "det_db_box_threshold",
+        "det_db_unclip_ratio", "det_use_dilation", "cls_threshold",
+        "cls_batch_size", "rec_batch_size", "rec_concurrency",
+        "engine_instances", "worker_threads", "max_request_bytes",
+        "max_image_pixels", "logging"
+    }, "HTTP service configuration");
+    if (!document.contains("schema_version")) {
+        throw std::runtime_error(
+            "HTTP service configuration requires schema_version");
+    }
+    if (document.contains("$schema") &&
+        (!document.at("$schema").is_string() ||
+         document.at("$schema").get_ref<const std::string&>().empty())) {
+        throw std::runtime_error("$schema must be a non-empty string");
+    }
+    const int schema_version = document.at("schema_version").get<int>();
+    if (schema_version != kConfigSchemaVersion) {
+        throw std::runtime_error(
+            "unsupported HTTP service configuration schema_version: " +
+            std::to_string(schema_version));
+    }
 
     const fs::path base = fs::absolute(path).parent_path();
     ServiceConfig config;
     config.listen_host = document.value("listen_host", config.listen_host);
     config.port = document.value("port", config.port);
-    config.model_manifest = ResolvePath(base, document.value(
-        "model_manifest", "models/ppocrv6-tiny/model.json"));
-    config.web_root = ResolvePath(base, document.value("web_root", "www"));
+    const std::string model_manifest = document.value(
+        "model_manifest", "models/ppocrv6-tiny/model.json");
+    const std::string web_root = document.value("web_root", "www");
+    if (config.listen_host.empty() || model_manifest.empty() ||
+        web_root.empty()) {
+        throw std::runtime_error(
+            "listen_host, model_manifest, and web_root must not be empty");
+    }
+    config.model_manifest = ResolvePath(base, model_manifest);
+    config.web_root = ResolvePath(base, web_root);
     config.api_key = document.value("api_key", std::string{});
     config.enable_classifier = document.value(
         "enable_classifier", config.enable_classifier);
@@ -314,8 +375,22 @@ ServiceConfig LoadConfig(const fs::path& path) {
 
     if (document.contains("logging")) {
         const json& logging = document.at("logging");
+        RejectUnknownProperties(logging, {
+            "enabled", "level", "console", "file_enabled", "file_path",
+            "request_enabled", "request_start_enabled",
+            "access_file_enabled", "access_file_path", "access_format",
+            "flush_interval_seconds", "trusted_proxies",
+            "max_file_size_mb", "max_files"
+        }, "logging configuration");
         config.logging.enabled = logging.value("enabled", config.logging.enabled);
         config.logging.level = logging.value("level", config.logging.level);
+        const std::vector<std::string> allowed_levels = {
+            "trace", "debug", "info", "warn", "warning", "error",
+            "critical", "off"};
+        if (std::find(allowed_levels.begin(), allowed_levels.end(),
+                config.logging.level) == allowed_levels.end()) {
+            throw std::runtime_error("logging.level is unsupported");
+        }
         config.logging.console = logging.value("console", config.logging.console);
         config.logging.file_enabled = logging.value(
             "file_enabled", config.logging.file_enabled);
@@ -331,13 +406,26 @@ ServiceConfig LoadConfig(const fs::path& path) {
             "flush_interval_seconds", config.logging.flush_interval_seconds);
         config.logging.max_files = logging.value(
             "max_files", config.logging.max_files);
-        const size_t max_mb = logging.value("max_file_size_mb", size_t{10});
-        config.logging.max_file_size = max_mb * 1024u * 1024u;
+        const uint64_t max_mb = logging.value(
+            "max_file_size_mb", uint64_t{10});
+        if (max_mb < 1 || max_mb > 1024) {
+            throw std::runtime_error(
+                "logging.max_file_size_mb must be between 1 and 1024");
+        }
+        config.logging.max_file_size =
+            static_cast<size_t>(max_mb * 1024u * 1024u);
         const std::string log_path = logging.value(
             "file_path", config.logging.file_path);
+        if (log_path.empty()) {
+            throw std::runtime_error("logging.file_path must not be empty");
+        }
         config.logging.file_path = ResolvePath(base, log_path).u8string();
         const std::string access_log_path = logging.value(
             "access_file_path", config.logging.access_file_path);
+        if (access_log_path.empty()) {
+            throw std::runtime_error(
+                "logging.access_file_path must not be empty");
+        }
         config.logging.access_file_path =
             ResolvePath(base, access_log_path).u8string();
         if (logging.contains("trusted_proxies")) {
@@ -349,22 +437,58 @@ ServiceConfig LoadConfig(const fs::path& path) {
             config.logging.trusted_proxies.clear();
             for (const json& proxy : proxies) {
                 if (!proxy.is_string() || proxy.get_ref<
-                        const std::string&>().empty()) {
+                        const std::string&>().empty() ||
+                    proxy.get_ref<const std::string&>().size() > 64) {
                     throw std::runtime_error(
-                        "logging.trusted_proxies must contain non-empty strings");
+                        "logging.trusted_proxies entries must contain 1 to 64 characters");
                 }
-                config.logging.trusted_proxies.push_back(proxy.get<std::string>());
+                const std::string value = proxy.get<std::string>();
+                if (std::find(config.logging.trusted_proxies.begin(),
+                        config.logging.trusted_proxies.end(), value) !=
+                        config.logging.trusted_proxies.end()) {
+                    throw std::runtime_error(
+                        "logging.trusted_proxies entries must be unique");
+                }
+                config.logging.trusted_proxies.push_back(value);
+            }
+            if (config.logging.trusted_proxies.size() > 64) {
+                throw std::runtime_error(
+                    "logging.trusted_proxies must contain at most 64 items");
             }
         }
     }
 
     ApplyEnvironmentOverrides(config, base);
 
+    if (config.logging.trusted_proxies.size() > 64) {
+        throw std::runtime_error(
+            "logging.trusted_proxies must contain at most 64 items");
+    }
+    for (size_t index = 0; index < config.logging.trusted_proxies.size();
+         ++index) {
+        const std::string& proxy = config.logging.trusted_proxies[index];
+        if (proxy.empty() || proxy.size() > 64 ||
+            std::find(config.logging.trusted_proxies.begin(),
+                config.logging.trusted_proxies.begin() + index, proxy) !=
+                config.logging.trusted_proxies.begin() + index) {
+            throw std::runtime_error(
+                "logging.trusted_proxies must contain unique strings of 1 to 64 characters");
+        }
+    }
+
     if (config.port < 1 || config.port > 65535 ||
         config.worker_threads < 1 || config.worker_threads > 128 ||
         config.engine_instances < 1 || config.engine_instances > 32 ||
-        config.limit_side_len < 32 || config.cls_batch_size < 1 ||
-        config.rec_batch_size < 1 || config.rec_concurrency < 1 ||
+        config.limit_side_len < 32 || config.limit_side_len > 10000 ||
+        config.det_db_threshold < 0.0f || config.det_db_threshold > 1.0f ||
+        config.det_db_box_threshold < 0.0f ||
+        config.det_db_box_threshold > 1.0f ||
+        config.det_db_unclip_ratio <= 0.0f ||
+        config.det_db_unclip_ratio > 10.0f ||
+        config.cls_threshold < 0.0f || config.cls_threshold > 1.0f ||
+        config.cls_batch_size < 1 || config.cls_batch_size > 256 ||
+        config.rec_batch_size < 1 || config.rec_batch_size > 256 ||
+        config.rec_concurrency < 1 || config.rec_concurrency > 32 ||
         config.max_request_bytes < 1024 ||
         config.max_request_bytes > 256u * 1024u * 1024u ||
         config.max_image_pixels < 1 || config.max_image_pixels > 200000000u ||
@@ -499,7 +623,22 @@ private:
 void SetJson(httplib::Response& response, const json& value, int status = 200) {
     response.status = status;
     response.set_header("Cache-Control", "no-store");
-    response.set_content(value.dump(), "application/json; charset=utf-8");
+    response.set_header("X-LW-PPOCR-API-Version", kHttpApiVersion);
+    response.set_content(
+        value.dump(-1, ' ', false, json::error_handler_t::replace),
+        "application/json; charset=utf-8");
+}
+
+json ErrorResponse(
+    const std::string& request_id,
+    const std::string& error_code,
+    const std::string& message) {
+    return {
+        {"ok", false},
+        {"request_id", request_id},
+        {"error_code", error_code},
+        {"error", message}
+    };
 }
 
 bool ConstantTimeEquals(const std::string& left, const std::string& right) {
@@ -519,8 +658,8 @@ bool Authorized(const ServiceConfig& config, const httplib::Request& request,
             request.get_header_value("X-API-Key"), config.api_key)) {
         return true;
     }
-    SetJson(response, {{"ok", false}, {"request_id", request_id},
-        {"error", "invalid API key"}}, 401);
+    SetJson(response, ErrorResponse(
+        request_id, "unauthorized", "invalid API key"), 401);
     return false;
 }
 
@@ -794,6 +933,8 @@ void PrintStartupInfo(const ServiceConfig& config) {
         << "============================================================\n"
         << "Startup parameters / 启动参数\n"
         << "  config_file: " << g_config_path.u8string() << '\n'
+        << "  config_schema_version: " << kConfigSchemaVersion << '\n'
+        << "  http_api_version: " << kHttpApiVersion << '\n'
         << "  listen_host: " << config.listen_host << '\n'
         << "  port: " << config.port << '\n'
         << "  backend: OpenCV DNN (CPU)\n"
@@ -879,6 +1020,10 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
             }
 
             if (recognition_only && body.contains("images_base64")) {
+                if (body.size() != 1) {
+                    throw std::invalid_argument(
+                        "batch JSON request only accepts images_base64");
+                }
                 operation = "recognize_batch";
                 const json& values = body.at("images_base64");
                 if (!values.is_array() || values.empty() || values.size() > 256) {
@@ -902,6 +1047,10 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
                 native = CallRecognizeBatch(lease.get(), images);
                 native["image_count"] = images.size();
             } else {
+                if (body.size() != 1) {
+                    throw std::invalid_argument(
+                        "single-image JSON request only accepts image_base64");
+                }
                 if (!body.contains("image_base64") ||
                     !body.at("image_base64").is_string()) {
                     throw std::invalid_argument(
@@ -927,20 +1076,23 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
         SetJson(response, native);
         LogRequest(config, request, response, request_id, operation, start,
             count, &native);
-    } catch (const json::exception& exception) {
-        SetJson(response, {{"ok", false}, {"request_id", request_id},
-            {"error", std::string("invalid JSON request: ") +
-                exception.what()}}, 400);
+    } catch (const json::exception&) {
+        // A parser diagnostic may quote raw non-UTF-8 request bytes. Returning
+        // it inside JSON can make serialization fail and turn a client error
+        // into an empty HTTP 500 response. Keep the public error valid UTF-8
+        // and stable; request_id and error_code retain the diagnostic context.
+        SetJson(response, ErrorResponse(
+            request_id, "invalid_json", "invalid JSON request"), 400);
         LogRequest(config, request, response, request_id, operation, start,
             0, nullptr, "invalid_json");
     } catch (const std::invalid_argument& exception) {
-        SetJson(response, {{"ok", false}, {"request_id", request_id},
-            {"error", exception.what()}}, 400);
+        SetJson(response, ErrorResponse(
+            request_id, "invalid_request", exception.what()), 400);
         LogRequest(config, request, response, request_id, operation, start,
             0, nullptr, "invalid_request");
     } catch (const std::exception& exception) {
-        SetJson(response, {{"ok", false}, {"request_id", request_id},
-            {"error", exception.what()}}, 500);
+        SetJson(response, ErrorResponse(
+            request_id, "internal_error", exception.what()), 500);
         if (const auto logger = lw::ppocr::http::Logger()) {
             logger->error("request_failed request_id={} error_code={} error={}",
                 request_id, "internal_error", exception.what());
@@ -999,8 +1151,8 @@ int RunServer(const ServiceConfig& config,
             const auto start = Clock::now();
             const std::string request_id = NewRequestId();
             response.set_header("X-Request-ID", request_id);
-            SetJson(response, {{"ok", false}, {"request_id", request_id},
-                {"error", "request exceeds max_request_bytes"}}, 413);
+            SetJson(response, ErrorResponse(request_id, "payload_too_large",
+                "request exceeds max_request_bytes"), 413);
             const std::string operation = request.path == "/api/recognize"
                 ? "recognize" : "ocr";
             LogRequest(config, request, response, request_id, operation, start,
