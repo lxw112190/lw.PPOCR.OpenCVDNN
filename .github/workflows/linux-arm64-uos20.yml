@@ -1,0 +1,195 @@
+name: Linux ARM64 (UOS 20 compatible)
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OPENCV_VERSION: 5.0.0
+  CMAKE_VERSION: 3.31.6
+  PACKAGE_VERSION: 0.4.0
+  PACKAGE_PLATFORM: arm64-uos20
+
+jobs:
+  debian-10-arm64:
+    name: Debian 10 ARM64 / UOS 20 ABI baseline
+    runs-on: ubuntu-22.04-arm
+    container: debian:10-slim
+    timeout-minutes: 120
+
+    steps:
+      - name: Install Debian 10 ARM64 toolchain
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          printf '%s\n' \
+            'deb http://archive.debian.org/debian buster main' \
+            'deb http://archive.debian.org/debian-security buster/updates main' \
+            > /etc/apt/sources.list
+          printf 'Acquire::Check-Valid-Until "false";\n' \
+            > /etc/apt/apt.conf.d/99archive
+          apt-get -o Acquire::Check-Valid-Until=false update
+          apt-get install -y --no-install-recommends \
+            binutils build-essential ca-certificates curl file git \
+            libjpeg-dev libpng-dev libtiff-dev ninja-build pkg-config \
+            python3 tar xz-utils zlib1g-dev
+          curl --fail --location --retry 5 --retry-delay 5 \
+            --retry-connrefused \
+            "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz" \
+            --output /tmp/cmake.tar.gz
+          mkdir -p /opt/cmake
+          tar -xzf /tmp/cmake.tar.gz --strip-components=1 -C /opt/cmake
+          echo /opt/cmake/bin >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@v6
+
+      - name: Confirm UOS 20-compatible build baseline
+        run: |
+          test "$(uname -m)" = "aarch64"
+          test "$(getconf GNU_LIBC_VERSION)" = "glibc 2.28"
+          test "$(gcc -dumpfullversion -dumpversion)" = "8.3.0"
+          cat /etc/os-release
+          uname -m
+          getconf GNU_LIBC_VERSION
+          gcc --version | head -n 1
+          python3 --version
+          cmake --version | head -n 1
+          ninja --version
+
+      - name: Restore minimal OpenCV ARM64 cache
+        id: opencv-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .ci/opencv-5.0.0-debian10-arm64
+          key: opencv-5.0.0-debian10-arm64-gcc8-armv8a-minimal-v1
+
+      - name: Build minimal OpenCV ARM64
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        run: |
+          rm -rf /tmp/opencv-source /tmp/opencv-build
+          mkdir -p .ci /tmp/opencv-source /tmp/opencv-build
+          curl --fail --location --retry 5 --retry-delay 5 \
+            --retry-connrefused \
+            "https://github.com/opencv/opencv/archive/refs/tags/${OPENCV_VERSION}.tar.gz" \
+            --output /tmp/opencv.tar.gz
+          tar -xzf /tmp/opencv.tar.gz --strip-components=1 -C /tmp/opencv-source
+          cmake -S /tmp/opencv-source -B /tmp/opencv-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS_RELEASE='-O3 -DNDEBUG -march=armv8-a' \
+            -DCMAKE_CXX_FLAGS_RELEASE='-O3 -DNDEBUG -march=armv8-a' \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/.ci/opencv-5.0.0-debian10-arm64" \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DBUILD_LIST=core,imgproc,imgcodecs,dnn \
+            -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF -DBUILD_JAVA=OFF \
+            -DBUILD_opencv_apps=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_TESTS=OFF \
+            -DBUILD_JPEG=ON -DBUILD_PNG=ON -DBUILD_PROTOBUF=ON \
+            -DBUILD_TIFF=ON -DBUILD_ZLIB=ON \
+            -DWITH_EIGEN=OFF -DWITH_FFMPEG=OFF \
+            -DWITH_GDAL=OFF -DWITH_GSTREAMER=OFF -DWITH_GTK=OFF \
+            -DWITH_IPP=OFF -DWITH_ITT=OFF -DWITH_JASPER=OFF \
+            -DWITH_LAPACK=OFF -DWITH_OPENCL=OFF -DWITH_OPENEXR=OFF \
+            -DWITH_QT=OFF -DWITH_TBB=OFF -DWITH_WEBP=OFF
+          cmake --build /tmp/opencv-build --parallel 2
+          cmake --install /tmp/opencv-build
+
+      - name: Save minimal OpenCV ARM64 cache
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .ci/opencv-5.0.0-debian10-arm64
+          key: ${{ steps.opencv-cache.outputs.cache-primary-key }}
+
+      - name: Configure and build ARM64 service
+        run: |
+          bash -n deploy/linux/*.sh scripts/package_linux.sh
+          python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py \
+            scripts/ocr_regression.py scripts/logging_smoke.py scripts/check_abi.py \
+            scripts/validate_model_manifest.py
+          python3 scripts/validate_model_manifest.py \
+            --manifest models/ppocrv6-tiny/model.json --require-sha256
+          config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0-debian10-arm64" \
+            -name OpenCVConfig.cmake -print -quit)"
+          test -n "$config"
+          cmake -S . -B build/ci-arm64-uos20 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS_RELEASE='-O3 -DNDEBUG -march=armv8-a' \
+            -DCMAKE_CXX_FLAGS_RELEASE='-O3 -DNDEBUG -march=armv8-a' \
+            -DOpenCV_DIR="$(dirname "$config")"
+          cmake --build build/ci-arm64-uos20 --parallel 2
+
+      - name: Unit and real OCR tests
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/.ci/opencv-5.0.0-debian10-arm64/lib
+        run: |
+          ctest --test-dir build/ci-arm64-uos20 --output-on-failure
+          build/ci-arm64-uos20/lw-ppocr-c-example \
+            models/ppocrv6-tiny/model.json models/ppocrv6-tiny/sample.jpg
+
+      - name: Package and verify UOS 20-compatible ARM64 artifact
+        run: |
+          bash scripts/package_linux.sh \
+            build/ci-arm64-uos20 .ci/opencv-5.0.0-debian10-arm64 \
+            dist "$PACKAGE_VERSION" "$PACKAGE_PLATFORM"
+          package="dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-${PACKAGE_PLATFORM}"
+          for script in run-http-service.sh install-service.sh uninstall-service.sh \
+                        start-service.sh stop-service.sh restart-service.sh; do
+            test -x "$package/$script"
+          done
+          grep -Fx 'package_platform=linux-arm64-uos20' \
+            "$package/BUILD-ENVIRONMENT.txt"
+          grep -Fx 'machine=aarch64' "$package/BUILD-ENVIRONMENT.txt"
+          grep -Fx 'glibc=glibc 2.28' "$package/BUILD-ENVIRONMENT.txt"
+          grep -Fx 'opencv=5.0.0' "$package/BUILD-ENVIRONMENT.txt"
+          python3 scripts/validate_model_manifest.py \
+            --manifest "$package/models/ppocrv6-tiny/model.json" --require-sha256
+          python3 scripts/http_smoke.py --package-dir "$package" --port 18787
+          python3 scripts/logging_smoke.py --package-dir "$package" --port 18785 \
+            --access-format jsonl
+          python3 scripts/logging_smoke.py --package-dir "$package" \
+            --port 18783 --access-format text
+          python3 scripts/ocr_regression.py --package-dir "$package" \
+            --cases tests/regression/ppocrv6-tiny.json --port 18786
+          python3 scripts/check_abi.py \
+            --library "$package/liblw.PPOCR.OpenCVDNN.so"
+          python3 scripts/http_stress.py --package-dir "$package" \
+            --iterations 64 --concurrency 2 --port 18788
+
+          for binary in "$package/lw-ppocr-http-service" \
+                        "$package/lw-ppocr-c-example" \
+                        "$package/liblw.PPOCR.OpenCVDNN.so"; do
+            file "$binary"
+            readelf -h "$binary" | grep -E 'Machine:.*AArch64'
+            if LD_LIBRARY_PATH="$package" ldd "$binary" | grep -q 'not found'; then
+              LD_LIBRARY_PATH="$package" ldd "$binary" >&2
+              exit 1
+            fi
+          done
+
+          max_glibc="$(find "$package" -maxdepth 1 -type f \
+            \( -name '*.so*' -o -perm /111 \) -exec readelf --version-info '{}' \; \
+            2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | \
+            sort -Vu | tail -n 1)"
+          test -n "$max_glibc"
+          test "$(printf '%s\n' 2.28 "$max_glibc" | sort -V | tail -n 1)" = '2.28'
+          echo "Maximum required glibc symbol: GLIBC_${max_glibc}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-linux-arm64-uos20
+          path: |
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-linux-arm64-uos20.tar.gz
+            dist/lw.PPOCR.OpenCVDNN-v${{ env.PACKAGE_VERSION }}-linux-arm64-uos20.tar.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

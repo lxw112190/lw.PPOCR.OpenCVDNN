@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-  echo "Usage: $0 <build-dir> <opencv-prefix> <output-dir> <version>" >&2
+if [[ $# -lt 4 || $# -gt 5 ]]; then
+  echo "Usage: $0 <build-dir> <opencv-prefix> <output-dir> <version> [platform]" >&2
   exit 2
 fi
 
@@ -10,7 +10,12 @@ build_dir="$(realpath "$1")"
 opencv_prefix="$(realpath "$2")"
 output_dir="$(mkdir -p "$3" && realpath "$3")"
 version="$4"
-package_name="lw.PPOCR.OpenCVDNN-v${version}-linux-x64"
+platform="${5:-x64}"
+if [[ ! "$platform" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
+  echo "Invalid Linux platform suffix: $platform" >&2
+  exit 2
+fi
+package_name="lw.PPOCR.OpenCVDNN-v${version}-linux-${platform}"
 package_dir="${output_dir}/${package_name}"
 
 if [[ -e "$package_dir" ]]; then
@@ -33,6 +38,27 @@ gcc_runtime="$(gcc -print-file-name=libgcc_s.so.1)"
 [[ -f "$gcc_runtime" ]] || { echo "libgcc_s.so.1 not found" >&2; exit 1; }
 cp -L "$cxx_runtime" "$package_dir/libstdc++.so.6"
 cp -L "$gcc_runtime" "$package_dir/libgcc_s.so.1"
+opencv_version_header="$opencv_prefix/include/opencv2/core/version.hpp"
+opencv_major="$(awk '$2 == "CV_VERSION_MAJOR" { print $3; exit }' \
+  "$opencv_version_header")"
+opencv_minor="$(awk '$2 == "CV_VERSION_MINOR" { print $3; exit }' \
+  "$opencv_version_header")"
+opencv_revision="$(awk '$2 == "CV_VERSION_REVISION" { print $3; exit }' \
+  "$opencv_version_header")"
+if [[ -z "$opencv_major" || -z "$opencv_minor" || -z "$opencv_revision" ]]; then
+  echo "Could not determine OpenCV version from: $opencv_version_header" >&2
+  exit 1
+fi
+opencv_version="${opencv_major}.${opencv_minor}.${opencv_revision}"
+{
+  echo "product=lw.PPOCR.OpenCVDNN"
+  echo "version=${version}"
+  echo "package_platform=linux-${platform}"
+  echo "machine=$(uname -m)"
+  echo "glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
+  echo "gcc=$(gcc -dumpfullversion -dumpversion)"
+  echo "opencv=${opencv_version}"
+} > "$package_dir/BUILD-ENVIRONMENT.txt"
 cat > "$package_dir/licenses/GCC-RUNTIME-NOTICE.txt" <<'EOF'
 The Linux package redistributes libstdc++.so.6 and libgcc_s.so.1 from GCC.
 They are covered by GPL-3.0-or-later with the GCC Runtime Library Exception 3.1.

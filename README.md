@@ -21,7 +21,7 @@
 - Docker / Docker Compose：Linux x64 非 root 镜像、健康检查、持久化日志和 GHCR 发布。
 - 正确性回归：固定样图、文字顺序、方向分类、置信度与检测框容差均有黄金基线。
 - 接口契约：C ABI v1 导出符号、结构布局与模型清单 Schema v1 自动防回退。
-- Windows x64、Linux x64、macOS ARM64 CI；核心代码不包含平台专用推理逻辑。
+- Windows x64、Linux x64、Linux ARM64（统信 UOS 20 兼容基线）、macOS ARM64 CI；核心代码不包含平台专用推理逻辑。
 
 ## 快速使用 HTTP 服务
 
@@ -39,6 +39,10 @@ Linux：
 chmod +x lw-ppocr-http-service
 ./lw-ppocr-http-service
 ```
+
+统信 UOS 20 ARM64 请下载文件名包含 `linux-arm64-uos20` 的产物。该包使用 Debian 10
+ARM64 的 glibc 2.28 / GCC 8.3 基线原生构建，部署和兼容边界见
+[Linux ARM64 与统信 UOS 20](docs/LINUX-ARM64-UOS20.md)。
 
 macOS Apple Silicon：
 
@@ -158,7 +162,7 @@ X-API-Key: replace-with-a-long-random-secret
   "request_start_enabled": true,
   "access_file_enabled": true,
   "access_file_path": "logs/access.log",
-  "access_format": "jsonl",
+  "access_format": "text",
   "flush_interval_seconds": 1,
   "trusted_proxies": [],
   "max_file_size_mb": 10,
@@ -166,7 +170,7 @@ X-API-Key: replace-with-a-long-random-secret
 }
 ```
 
-- `runtime.log` 记录启动、模型加载、警告、异常与崩溃线索；`access.log` 默认每个 OCR 请求一行 JSONL，记录请求 ID、状态、输入/输出大小、图片尺寸、分阶段耗时和错误码。
+- `runtime.log` 记录启动、模型加载、警告、异常与崩溃线索；`access.log` 默认使用与运行日志一致的带时间文本格式，记录请求 ID、状态、输入/输出大小、图片尺寸、分阶段耗时和错误码；需要日志采集程序解析时可改为 `jsonl`。
 - `enabled=false` 会关闭全部 spdlog 日志；`request_enabled=false` 仅关闭逐请求访问日志与 `request_started`。
 - `request_start_enabled=true` 会在推理前刷新一条运行日志，便于定位“处理哪一个请求时退出”；访问日志按 `flush_interval_seconds` 周期刷新，两类文件独立按大小轮转。
 - 所有 OCR 响应都会在 JSON 和 `X-Request-ID` 响应头返回相同请求 ID。默认忽略 `X-Forwarded-For`；只有直接代理 IP 明确列入 `trusted_proxies` 后才会采用其转发地址。
@@ -212,7 +216,7 @@ cmake --install build --config Release --prefix dist/package
 
 Windows 使用 DLL，Linux 使用 `.so`，macOS 使用 `.dylib`。CI 发布包按“解压即可运行”整理：包含 OCR Runtime、OpenCV、模型、配置、网页和示例；Windows 额外包含 VC143 x64 运行库，Linux 额外包含 `libstdc++.so.6` 与 `libgcc_s.so.1`，图像编解码依赖静态编入 OpenCV。glibc、Linux 动态加载器、Windows 系统 DLL 和 macOS 系统框架不随包分发，目标机仍需满足发布包标注的系统与架构基线。
 
-Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。三套原生工作流都会执行单元测试、模型文件 SHA-256、C ABI 导出、黄金正确性回归、HTTP 冒烟测试，以及多尺寸图片并发、异常请求和 RSS 内存增长测试。Windows 工作流每天定时执行 5000 次长测，普通提交执行 64 次快速稳定性检查。Docker 工作流额外验证非 root 运行、Compose、健康检查、API Key 和二进制 OCR；推送正式 `v*` 标签时才会发布 GHCR 镜像。所有发布附件均包含 SHA-256 校验文件。
+Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。四套原生工作流都会执行单元测试、模型文件 SHA-256、C ABI 导出、黄金正确性回归、HTTP 冒烟测试，以及多尺寸图片并发、异常请求和 RSS 内存增长测试。Linux ARM64 工作流还会验证 AArch64 ELF 与最高 GLIBC 符号版本。Windows 工作流每天定时执行 5000 次长测，普通提交执行 64 次快速稳定性检查。Docker 工作流额外验证非 root 运行、Compose、健康检查、API Key 和二进制 OCR；推送正式 `v*` 标签时才会发布 GHCR 镜像。所有发布附件均包含 SHA-256 校验文件。
 
 ## 并发建议
 

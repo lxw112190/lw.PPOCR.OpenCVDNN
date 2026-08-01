@@ -21,7 +21,7 @@ The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the C
 - Docker and Docker Compose with a non-root Linux x64 image, health checks, persistent logs, and GHCR publishing.
 - Golden correctness regression for text order, orientation labels, confidence, and bounding-box tolerance.
 - Automated compatibility checks for C ABI v1 exports and layouts and model-manifest Schema v1.
-- Windows x64, Linux x64, and macOS ARM64 CI, with platform-neutral inference code.
+- Windows x64, Linux x64, Linux ARM64 (UnionTech UOS 20 compatibility baseline), and macOS ARM64 CI, with platform-neutral inference code.
 
 ## HTTP quick start
 
@@ -37,6 +37,11 @@ Run the executable from the extracted package directory:
 chmod +x lw-ppocr-http-service
 ./lw-ppocr-http-service
 ```
+
+For UnionTech UOS 20 ARM64, download the artifact containing
+`linux-arm64-uos20`. It is built natively against a Debian 10 ARM64 glibc 2.28
+and GCC 8.3 baseline. See [Linux ARM64 and UnionTech UOS 20](docs/LINUX-ARM64-UOS20.md)
+for deployment steps and the precise compatibility statement.
 
 ```bash
 # macOS Apple Silicon
@@ -137,7 +142,7 @@ The service never logs API Keys, Base64 image data, request bodies, or recognize
 
 ### Logging
 
-v0.4.0 separates human-readable runtime diagnostics in `logs/runtime.log` from one-JSON-object-per-line OCR access records in `logs/access.log`. Access records include the request ID, status, input/output sizes, image dimensions, stage timings, and stable error codes. Every OCR response returns the same ID in its JSON body and `X-Request-ID` header.
+v0.4.0 separates human-readable runtime diagnostics in `logs/runtime.log` from OCR access records in `logs/access.log`. Access logging defaults to the same timestamped text style as the runtime log; set `access_format` to `jsonl` when structured collection is preferred. Access records include the request ID, status, input/output sizes, image dimensions, stage timings, and stable error codes. Every OCR response returns the same ID in its JSON body and `X-Request-ID` header.
 
 Set `enabled=false` to disable spdlog entirely, or `request_enabled=false` to keep runtime logs while disabling access records and request-start breadcrumbs. With `request_start_enabled=true`, the service explicitly flushes a `request_started` record before inference; access records are periodically flushed according to `flush_interval_seconds`. `X-Forwarded-For` is ignored unless the immediate proxy IP is explicitly listed in `trusted_proxies`. Caught failures, `std::terminate`, and Windows unhandled-exception code/address are recorded on a best-effort basis.
 
@@ -181,7 +186,7 @@ cmake --install build --config Release --prefix dist/package
 
 CI artifacts are assembled for immediate use after extraction. They include the OCR runtime, OpenCV, models, configuration, web assets, and examples. Windows also bundles the VC143 x64 runtime. Linux bundles `libstdc++.so.6` and `libgcc_s.so.1`, while image-codec dependencies are linked into OpenCV statically. glibc, the Linux ELF loader, Windows system DLLs, and macOS system frameworks remain platform dependencies, so the target still needs to match the documented OS and architecture baseline.
 
-Linux and macOS CI save OpenCV only after a successful build and install, while Windows CI caches the extracted official prebuilt package. All three native workflows verify model SHA-256 values, frozen C ABI exports, golden OCR correctness, unit tests, HTTP smoke behavior, varied-image concurrency, malformed requests, and RSS growth. The Windows workflow runs 5,000 stability iterations nightly and 64 iterations on regular changes. The Docker workflow separately validates non-root execution, Compose, health checks, API Key enforcement, and binary OCR; it publishes the GHCR image only for a formal `v*` tag. Release attachments include SHA-256 checksums.
+Linux and macOS CI save OpenCV only after a successful build and install, while Windows CI caches the extracted official prebuilt package. All four native workflows verify model SHA-256 values, frozen C ABI exports, golden OCR correctness, unit tests, HTTP smoke behavior, varied-image concurrency, malformed requests, and RSS growth. The Linux ARM64 workflow additionally verifies AArch64 ELF files and the maximum required GLIBC symbol version. The Windows workflow runs 5,000 stability iterations nightly and 64 iterations on regular changes. The Docker workflow separately validates non-root execution, Compose, health checks, API Key enforcement, and binary OCR; it publishes the GHCR image only for a formal `v*` tag. Release attachments include SHA-256 checksums.
 
 ## Concurrency
 

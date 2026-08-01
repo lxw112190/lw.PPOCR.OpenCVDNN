@@ -42,7 +42,7 @@ def main() -> int:
     parser.add_argument("--package-dir", type=pathlib.Path, required=True)
     parser.add_argument("--port", type=int, default=18785)
     parser.add_argument(
-        "--access-format", choices=("jsonl", "text"), default="jsonl")
+        "--access-format", choices=("jsonl", "text"), default="text")
     args = parser.parse_args()
 
     package = args.package_dir.resolve()
@@ -179,7 +179,10 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
-        config_path.unlink(missing_ok=True)
+        try:
+            config_path.unlink()
+        except FileNotFoundError:
+            pass
         shutil.rmtree(log_directory, ignore_errors=True)
 
 

@@ -174,7 +174,10 @@ def main() -> int:
                     assert "logging.access_file_enabled: false" in output
                 print("--- service output ---")
                 print(output)
-        config_path.unlink(missing_ok=True)
+        try:
+            config_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 if __name__ == "__main__":

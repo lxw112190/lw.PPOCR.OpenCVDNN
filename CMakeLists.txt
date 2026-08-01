@@ -138,6 +138,7 @@ install(FILES README.md README.en.md LICENSE THIRD-PARTY-NOTICES.md DESTINATION 
 install(FILES docs/assets/sponsor.jpg DESTINATION docs/assets)
 install(FILES docs/HTTP-API.md DESTINATION docs)
 install(FILES docs/DOCKER.md DESTINATION docs)
+install(FILES docs/LINUX-ARM64-UOS20.md DESTINATION docs)
 install(FILES docs/LOGGING.md DESTINATION docs)
 install(FILES docs/C-ABI.md DESTINATION docs)
 install(FILES docs/MODEL-MANIFEST.md DESTINATION docs)

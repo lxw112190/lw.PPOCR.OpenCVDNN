@@ -330,7 +330,10 @@ def main() -> int:
             if output and process.returncode not in (0, -15, 1):
                 print("--- service output ---")
                 print(output)
-        config_path.unlink(missing_ok=True)
+        try:
+            config_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 if __name__ == "__main__":
