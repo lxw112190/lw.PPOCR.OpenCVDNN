@@ -139,8 +139,8 @@
   }).catch(error => { status.textContent = `服务检查失败：${error}`; });
 
   function readBox(region) {
-    if (!Array.isArray(region?.box) || region.box.length !== 4) return null;
-    const points = region.box.map(point => [Number(point?.x), Number(point?.y)]);
+    const points = [1, 2, 3, 4].map(index =>
+      [Number(region?.[`x${index}`]), Number(region?.[`y${index}`])]);
     return points.every(point => point.every(Number.isFinite)) ? points : null;
   }
 

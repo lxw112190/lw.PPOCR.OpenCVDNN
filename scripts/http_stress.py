@@ -136,10 +136,13 @@ def assert_success(document, require_box: bool) -> None:
     assert isinstance(document.get("result"), list)
     assert isinstance(document.get("timing"), dict)
     if require_box:
+        coordinate_keys = {
+            f"{axis}{index}" for axis in ("x", "y") for index in range(1, 5)
+        }
         for item in document["result"]:
-            assert isinstance(item.get("box"), list) and len(item["box"]) == 4
-            assert not any(f"{axis}{index}" in item
-                for axis in ("x", "y") for index in range(1, 5))
+            assert all(isinstance(item.get(key), (int, float))
+                for key in coordinate_keys)
+            assert "box" not in item
 
 
 def expect_error(name: str, expected: int, response) -> str:

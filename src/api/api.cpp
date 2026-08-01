@@ -112,14 +112,11 @@ json OcrJson(
             {"text", region.text},
             {"score", region.score},
             {"cls_label", region.cls_label},
-            {"cls_score", region.cls_score},
-            {"box", json::array()}
+            {"cls_score", region.cls_score}
         };
         for (size_t index = 0; index < region.box.size(); ++index) {
-            item["box"].push_back({
-                {"x", region.box[index].x},
-                {"y", region.box[index].y}
-            });
+            item["x" + std::to_string(index + 1)] = region.box[index].x;
+            item["y" + std::to_string(index + 1)] = region.box[index].y;
         }
         items.push_back(std::move(item));
     }

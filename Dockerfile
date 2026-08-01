@@ -62,7 +62,7 @@ RUN python3 scripts/validate_model_manifest.py \
 
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
-ARG VERSION=0.3.0
+ARG VERSION=0.4.0
 LABEL org.opencontainers.image.title="lw.PPOCR.OpenCVDNN" \
       org.opencontainers.image.description="Cross-platform PP-OCR HTTP service powered by OpenCV DNN" \
       org.opencontainers.image.version="${VERSION}" \
@@ -82,7 +82,8 @@ COPY --from=build /opt/lw-ppocr /opt/lw-ppocr
 ENV LD_LIBRARY_PATH=/opt/lw-ppocr \
     LW_PPOCR_LISTEN_HOST=0.0.0.0 \
     LW_PPOCR_PORT=8787 \
-    LW_PPOCR_LOG_FILE=/data/logs/lw-ppocr.log
+    LW_PPOCR_LOG_FILE=/data/logs/runtime.log \
+    LW_PPOCR_ACCESS_LOG_FILE=/data/logs/access.log
 
 WORKDIR /opt/lw-ppocr
 VOLUME ["/data/logs"]

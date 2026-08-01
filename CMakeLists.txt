@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(lw.PPOCR.OpenCVDNN VERSION 0.3.0 LANGUAGES C CXX)
+project(lw.PPOCR.OpenCVDNN VERSION 0.4.0 LANGUAGES C CXX)
 
 option(LW_PPOCR_BUILD_HTTP_SERVICE "Build the cpp-httplib HTTP service" ON)
 option(LW_PPOCR_BUILD_EXAMPLES "Build native examples" ON)

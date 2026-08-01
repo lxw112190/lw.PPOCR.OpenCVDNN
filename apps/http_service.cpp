@@ -13,10 +13,12 @@
 #include <condition_variable>
 #include <csignal>
 #include <cstdlib>
+#include <ctime>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -175,6 +177,29 @@ bool EnvironmentBoolean(const char* name, bool current) {
     throw std::runtime_error(std::string("invalid boolean in ") + name);
 }
 
+std::vector<std::string> SplitCommaSeparated(const std::string& value) {
+    std::vector<std::string> values;
+    size_t begin = 0;
+    while (begin <= value.size()) {
+        const size_t separator = value.find(',', begin);
+        const size_t end = separator == std::string::npos
+            ? value.size() : separator;
+        std::string item = value.substr(begin, end - begin);
+        item.erase(item.begin(), std::find_if(item.begin(), item.end(),
+            [](unsigned char character) {
+                return std::isspace(character) == 0;
+            }));
+        item.erase(std::find_if(item.rbegin(), item.rend(),
+            [](unsigned char character) {
+                return std::isspace(character) == 0;
+            }).base(), item.end());
+        if (!item.empty()) values.push_back(std::move(item));
+        if (separator == std::string::npos) break;
+        begin = separator + 1;
+    }
+    return values;
+}
+
 void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
     if (const char* value = std::getenv("LW_PPOCR_LISTEN_HOST")) {
         config.listen_host = value;
@@ -209,11 +234,32 @@ void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
         "LW_PPOCR_FILE_LOGGING_ENABLED", config.logging.file_enabled);
     config.logging.request_enabled = EnvironmentBoolean(
         "LW_PPOCR_REQUEST_LOGGING_ENABLED", config.logging.request_enabled);
+    config.logging.request_start_enabled = EnvironmentBoolean(
+        "LW_PPOCR_REQUEST_START_LOGGING_ENABLED",
+        config.logging.request_start_enabled);
+    config.logging.access_file_enabled = EnvironmentBoolean(
+        "LW_PPOCR_ACCESS_FILE_LOGGING_ENABLED",
+        config.logging.access_file_enabled);
     if (const char* value = std::getenv("LW_PPOCR_LOG_FILE")) {
         if (*value == '\0') {
             throw std::runtime_error("LW_PPOCR_LOG_FILE must not be empty");
         }
         config.logging.file_path = ResolvePath(base, value).u8string();
+    }
+    if (const char* value = std::getenv("LW_PPOCR_ACCESS_LOG_FILE")) {
+        if (*value == '\0') {
+            throw std::runtime_error("LW_PPOCR_ACCESS_LOG_FILE must not be empty");
+        }
+        config.logging.access_file_path = ResolvePath(base, value).u8string();
+    }
+    if (const char* value = std::getenv("LW_PPOCR_ACCESS_LOG_FORMAT")) {
+        config.logging.access_format = value;
+    }
+    config.logging.flush_interval_seconds = static_cast<size_t>(
+        EnvironmentUnsigned("LW_PPOCR_LOG_FLUSH_INTERVAL_SECONDS",
+            config.logging.flush_interval_seconds));
+    if (const char* value = std::getenv("LW_PPOCR_TRUSTED_PROXIES")) {
+        config.logging.trusted_proxies = SplitCommaSeparated(value);
     }
 }
 
@@ -275,6 +321,14 @@ ServiceConfig LoadConfig(const fs::path& path) {
             "file_enabled", config.logging.file_enabled);
         config.logging.request_enabled = logging.value(
             "request_enabled", config.logging.request_enabled);
+        config.logging.request_start_enabled = logging.value(
+            "request_start_enabled", config.logging.request_start_enabled);
+        config.logging.access_file_enabled = logging.value(
+            "access_file_enabled", config.logging.access_file_enabled);
+        config.logging.access_format = logging.value(
+            "access_format", config.logging.access_format);
+        config.logging.flush_interval_seconds = logging.value(
+            "flush_interval_seconds", config.logging.flush_interval_seconds);
         config.logging.max_files = logging.value(
             "max_files", config.logging.max_files);
         const size_t max_mb = logging.value("max_file_size_mb", size_t{10});
@@ -282,6 +336,26 @@ ServiceConfig LoadConfig(const fs::path& path) {
         const std::string log_path = logging.value(
             "file_path", config.logging.file_path);
         config.logging.file_path = ResolvePath(base, log_path).u8string();
+        const std::string access_log_path = logging.value(
+            "access_file_path", config.logging.access_file_path);
+        config.logging.access_file_path =
+            ResolvePath(base, access_log_path).u8string();
+        if (logging.contains("trusted_proxies")) {
+            const json& proxies = logging.at("trusted_proxies");
+            if (!proxies.is_array()) {
+                throw std::runtime_error(
+                    "logging.trusted_proxies must be an array");
+            }
+            config.logging.trusted_proxies.clear();
+            for (const json& proxy : proxies) {
+                if (!proxy.is_string() || proxy.get_ref<
+                        const std::string&>().empty()) {
+                    throw std::runtime_error(
+                        "logging.trusted_proxies must contain non-empty strings");
+                }
+                config.logging.trusted_proxies.push_back(proxy.get<std::string>());
+            }
+        }
     }
 
     ApplyEnvironmentOverrides(config, base);
@@ -293,8 +367,23 @@ ServiceConfig LoadConfig(const fs::path& path) {
         config.rec_batch_size < 1 || config.rec_concurrency < 1 ||
         config.max_request_bytes < 1024 ||
         config.max_request_bytes > 256u * 1024u * 1024u ||
-        config.max_image_pixels < 1 || config.max_image_pixels > 200000000u) {
+        config.max_image_pixels < 1 || config.max_image_pixels > 200000000u ||
+        config.logging.max_file_size < 1024u ||
+        config.logging.max_files < 1 || config.logging.max_files > 100 ||
+        config.logging.flush_interval_seconds < 1 ||
+        config.logging.flush_interval_seconds > 60) {
         throw std::runtime_error("configuration contains an out-of-range value");
+    }
+    if (config.logging.access_format != "jsonl" &&
+        config.logging.access_format != "text") {
+        throw std::runtime_error(
+            "logging.access_format must be 'jsonl' or 'text'");
+    }
+    if (config.logging.file_enabled && config.logging.access_file_enabled &&
+        fs::weakly_canonical(config.logging.file_path) ==
+            fs::weakly_canonical(config.logging.access_file_path)) {
+        throw std::runtime_error(
+            "runtime and access log files must use different paths");
     }
     if (!fs::is_regular_file(config.model_manifest)) {
         throw std::runtime_error("model manifest does not exist: " +
@@ -447,27 +536,152 @@ double Milliseconds(Clock::time_point start, Clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
-void LogRequest(const httplib::Request& request, int status,
-                const std::string& request_id, Clock::time_point start,
-                size_t result_count = 0) {
-    if (!lw::ppocr::http::RequestLoggingEnabled()) return;
-    if (const auto logger = lw::ppocr::http::Logger()) {
-        logger->info("request_id={} remote={} method={} path={} bytes={} "
-                     "status={} total_ms={:.2f} results={}",
-            request_id, request.remote_addr, request.method, request.path,
-            request.body.size(), status, Milliseconds(start, Clock::now()),
-            result_count);
+std::string UtcTimestamp() {
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
+    std::tm value{};
+#if defined(_WIN32)
+    gmtime_s(&value, &seconds);
+#else
+    gmtime_r(&seconds, &value);
+#endif
+    const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()).count() % 1000;
+    std::ostringstream output;
+    output << std::put_time(&value, "%Y-%m-%dT%H:%M:%S") << '.'
+           << std::setw(3) << std::setfill('0') << milliseconds << 'Z';
+    return output.str();
+}
+
+bool PlausibleIpAddress(const std::string& value) {
+    return !value.empty() && value.size() <= 64 &&
+        std::all_of(value.begin(), value.end(), [](unsigned char character) {
+            return std::isxdigit(character) != 0 || character == '.' ||
+                character == ':';
+        });
+}
+
+std::string EffectiveRemoteAddress(
+    const ServiceConfig& config,
+    const httplib::Request& request) {
+    if (std::find(config.logging.trusted_proxies.begin(),
+            config.logging.trusted_proxies.end(), request.remote_addr) ==
+            config.logging.trusted_proxies.end()) {
+        return request.remote_addr;
+    }
+    std::string forwarded = request.get_header_value("X-Forwarded-For");
+    const size_t separator = forwarded.find(',');
+    if (separator != std::string::npos) forwarded.resize(separator);
+    forwarded.erase(forwarded.begin(), std::find_if(
+        forwarded.begin(), forwarded.end(), [](unsigned char character) {
+            return std::isspace(character) == 0;
+        }));
+    forwarded.erase(std::find_if(forwarded.rbegin(), forwarded.rend(),
+        [](unsigned char character) {
+            return std::isspace(character) == 0;
+        }).base(), forwarded.end());
+    return PlausibleIpAddress(forwarded) ? forwarded : request.remote_addr;
+}
+
+void CopyStageTiming(
+    const json& source,
+    json& destination,
+    const char* name) {
+    const auto item = source.find(name);
+    if (item != source.end() && item->is_object()) {
+        const auto total = item->find("total_ms");
+        if (total != item->end() && total->is_number()) {
+            destination[name] = total->get<double>();
+        }
     }
 }
 
-void LogRequestStart(const httplib::Request& request,
-                     const std::string& request_id) {
+void LogRequest(const ServiceConfig& config,
+                const httplib::Request& request,
+                const httplib::Response& response,
+                const std::string& request_id,
+                const std::string& operation,
+                Clock::time_point start,
+                size_t result_count = 0,
+                const json* native = nullptr,
+                const std::string& error_code = {}) {
     if (!lw::ppocr::http::RequestLoggingEnabled()) return;
+    const auto logger = lw::ppocr::http::AccessLogger();
+    if (logger == nullptr) return;
+    const double duration_ms = Milliseconds(start, Clock::now());
+    const std::string remote_ip = EffectiveRemoteAddress(config, request);
+    const std::string media_type = RequestMediaType(request);
+    if (lw::ppocr::http::ConfiguredAccessLogFormat() ==
+            lw::ppocr::http::AccessLogFormat::Text) {
+        logger->info("request_id={} remote_ip={} peer_ip={} method={} path={} "
+                     "operation={} content_type={} request_bytes={} "
+                     "response_bytes={} status={} duration_ms={:.2f} results={}{}",
+            request_id, remote_ip, request.remote_addr, request.method,
+            request.path, operation, media_type, request.body.size(),
+            response.body.size(), response.status, duration_ms, result_count,
+            error_code.empty() ? std::string{} : " error_code=" + error_code);
+        return;
+    }
+
+    json record = {
+        {"log_schema_version", 1},
+        {"timestamp", UtcTimestamp()},
+        {"level", "info"},
+        {"event", "request_complete"},
+        {"request_id", request_id},
+        {"remote_ip", remote_ip},
+        {"peer_ip", request.remote_addr},
+        {"method", request.method},
+        {"path", request.path},
+        {"operation", operation},
+        {"content_type", media_type},
+        {"request_format", IsBinaryImageMediaType(media_type)
+            ? "binary" : "json"},
+        {"status", response.status},
+        {"request_bytes", request.body.size()},
+        {"response_bytes", response.body.size()},
+        {"result_count", result_count},
+        {"duration_ms", duration_ms}
+    };
+    if (!error_code.empty()) record["error_code"] = error_code;
+    if (native != nullptr) {
+        const auto image = native->find("image");
+        if (image != native->end() && image->is_object()) {
+            record["image"] = *image;
+        }
+        const auto image_count = native->find("image_count");
+        if (image_count != native->end() && image_count->is_number_unsigned()) {
+            record["image_count"] = image_count->get<size_t>();
+        }
+        const auto timing = native->find("timing");
+        if (timing != native->end() && timing->is_object()) {
+            json timing_ms = {{"server_total", duration_ms}};
+            const auto decode = timing->find("decode_ms");
+            if (decode != timing->end() && decode->is_number()) {
+                timing_ms["decode"] = decode->get<double>();
+            }
+            CopyStageTiming(*timing, timing_ms, "detector");
+            CopyStageTiming(*timing, timing_ms, "classifier");
+            CopyStageTiming(*timing, timing_ms, "recognizer");
+            CopyStageTiming(*timing, timing_ms, "pipeline");
+            record["timing_ms"] = std::move(timing_ms);
+        }
+    }
+    logger->info("{}", record.dump());
+}
+
+void LogRequestStart(const ServiceConfig& config,
+                     const httplib::Request& request,
+                     const std::string& request_id,
+                     const std::string& operation) {
+    if (!lw::ppocr::http::RequestStartLoggingEnabled()) return;
     if (const auto logger = lw::ppocr::http::Logger()) {
-        logger->info("request_started request_id={} remote={} method={} "
-                     "path={} bytes={}",
-            request_id, request.remote_addr, request.method, request.path,
-            request.body.size());
+        logger->info("request_started request_id={} remote_ip={} peer_ip={} "
+                     "method={} path={} operation={} content_type={} bytes={}",
+            request_id, EffectiveRemoteAddress(config, request),
+            request.remote_addr, request.method, request.path, operation,
+            RequestMediaType(request), request.body.size());
+        logger->flush();
     }
 }
 
@@ -605,10 +819,23 @@ void PrintStartupInfo(const ServiceConfig& config) {
             : "configured / 已配置 (value hidden / 明文已隐藏)") << '\n'
         << "  logging.enabled: " << config.logging.enabled << '\n'
         << "  logging.level: " << config.logging.level << '\n'
+        << "  logging.console: " << config.logging.console << '\n'
         << "  logging.file_enabled: " << config.logging.file_enabled << '\n'
         << "  logging.file_path: " << config.logging.file_path << '\n'
         << "  logging.request_enabled: "
         << config.logging.request_enabled << '\n'
+        << "  logging.request_start_enabled: "
+        << config.logging.request_start_enabled << '\n'
+        << "  logging.access_file_enabled: "
+        << config.logging.access_file_enabled << '\n'
+        << "  logging.access_file_path: "
+        << config.logging.access_file_path << '\n'
+        << "  logging.access_format: "
+        << config.logging.access_format << '\n'
+        << "  logging.flush_interval_seconds: "
+        << config.logging.flush_interval_seconds << '\n'
+        << "  logging.trusted_proxies: "
+        << config.logging.trusted_proxies.size() << " configured\n"
         << "Request parameters / 请求参数\n"
         << "  POST /api/ocr JSON: {\"image_base64\":\"...\"}\n"
         << "  POST /api/ocr binary: image/* or application/octet-stream\n"
@@ -625,11 +852,14 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
                bool recognition_only) {
     const auto start = Clock::now();
     const std::string request_id = NewRequestId();
-    LogRequestStart(request, request_id);
+    std::string operation = recognition_only ? "recognize" : "ocr";
+    response.set_header("X-Request-ID", request_id);
     if (!Authorized(config, request, response, request_id)) {
-        LogRequest(request, response.status, request_id, start);
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, "unauthorized");
         return;
     }
+    LogRequestStart(config, request, request_id, operation);
     const std::string media_type = RequestMediaType(request);
     const bool binary_request = IsBinaryImageMediaType(media_type);
     try {
@@ -649,6 +879,7 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
             }
 
             if (recognition_only && body.contains("images_base64")) {
+                operation = "recognize_batch";
                 const json& values = body.at("images_base64");
                 if (!values.is_array() || values.empty() || values.size() > 256) {
                     throw std::invalid_argument(
@@ -694,23 +925,28 @@ void HandleApi(const ServiceConfig& config, EnginePool& engines,
             Milliseconds(start, Clock::now());
         const size_t count = native.value("result", json::array()).size();
         SetJson(response, native);
-        LogRequest(request, response.status, request_id, start, count);
+        LogRequest(config, request, response, request_id, operation, start,
+            count, &native);
     } catch (const json::exception& exception) {
         SetJson(response, {{"ok", false}, {"request_id", request_id},
             {"error", std::string("invalid JSON request: ") +
                 exception.what()}}, 400);
-        LogRequest(request, response.status, request_id, start);
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, "invalid_json");
     } catch (const std::invalid_argument& exception) {
         SetJson(response, {{"ok", false}, {"request_id", request_id},
             {"error", exception.what()}}, 400);
-        LogRequest(request, response.status, request_id, start);
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, "invalid_request");
     } catch (const std::exception& exception) {
         SetJson(response, {{"ok", false}, {"request_id", request_id},
             {"error", exception.what()}}, 500);
         if (const auto logger = lw::ppocr::http::Logger()) {
-            logger->error("request_id={} error={}", request_id, exception.what());
+            logger->error("request_failed request_id={} error_code={} error={}",
+                request_id, "internal_error", exception.what());
         }
-        LogRequest(request, response.status, request_id, start);
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, "internal_error");
     }
 }
 
@@ -738,8 +974,11 @@ int RunServer(const ServiceConfig& config,
     }
     server.Get("/health", [&config](const httplib::Request&,
                                     httplib::Response& response) {
+        const std::string request_id = NewRequestId();
+        response.set_header("X-Request-ID", request_id);
         SetJson(response, {
             {"ok", true}, {"status", "ready"},
+            {"request_id", request_id},
             {"product", kProduct}, {"version", kVersion},
             {"backend", "opencv-dnn"}, {"backend_name", "OpenCV DNN CPU"},
             {"api_key_required", !config.api_key.empty()},
@@ -754,11 +993,18 @@ int RunServer(const ServiceConfig& config,
         const httplib::Request& request, httplib::Response& response) {
         HandleApi(config, engines, request, response, true);
     });
-    server.set_error_handler([](const httplib::Request&,
+    server.set_error_handler([&config](const httplib::Request& request,
                                 httplib::Response& response) {
         if (response.status == 413) {
-            SetJson(response, {{"ok", false},
+            const auto start = Clock::now();
+            const std::string request_id = NewRequestId();
+            response.set_header("X-Request-ID", request_id);
+            SetJson(response, {{"ok", false}, {"request_id", request_id},
                 {"error", "request exceeds max_request_bytes"}}, 413);
+            const std::string operation = request.path == "/api/recognize"
+                ? "recognize" : "ocr";
+            LogRequest(config, request, response, request_id, operation, start,
+                0, nullptr, "payload_too_large");
             return httplib::Server::HandlerResponse::Handled;
         }
         return httplib::Server::HandlerResponse::Unhandled;

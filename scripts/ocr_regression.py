@@ -29,11 +29,14 @@ def request_json(url: str, data=None, content_type=None, timeout=120):
         return response.status, json.loads(response.read().decode("utf-8"))
 
 
-def bounds(box):
-    if not isinstance(box, list) or len(box) != 4:
-        raise AssertionError("OCR box must contain exactly four points")
-    x_values = [float(point["x"]) for point in box]
-    y_values = [float(point["y"]) for point in box]
+def bounds(item):
+    keys = [f"{axis}{index}" for axis in ("x", "y") for index in range(1, 5)]
+    if not all(isinstance(item.get(key), (int, float)) for key in keys):
+        raise AssertionError("OCR region must contain x1/y1 through x4/y4")
+    if "box" in item:
+        raise AssertionError("OCR region must not contain a duplicate box field")
+    x_values = [float(item[f"x{index}"]) for index in range(1, 5)]
+    y_values = [float(item[f"y{index}"]) for index in range(1, 5)]
     return [min(x_values), min(y_values), max(x_values), max(y_values)]
 
 
@@ -80,7 +83,7 @@ def validate_case(case, package, base_url):
         if float(actual.get("score", -1)) < minimum_score:
             raise AssertionError(
                 f"{case['id']} region {index}: score below {minimum_score}")
-        actual_bounds = bounds(actual.get("box"))
+        actual_bounds = bounds(actual)
         deltas = [abs(actual_value - expected_value)
             for actual_value, expected_value in zip(
                 actual_bounds, expected["bounds"])]
@@ -124,6 +127,7 @@ def main() -> int:
         "LW_PPOCR_API_KEY": "",
         "LW_PPOCR_WORKER_THREADS": "2",
         "LW_PPOCR_FILE_LOGGING_ENABLED": "false",
+        "LW_PPOCR_ACCESS_FILE_LOGGING_ENABLED": "false",
         "LW_PPOCR_REQUEST_LOGGING_ENABLED": "false",
     })
 

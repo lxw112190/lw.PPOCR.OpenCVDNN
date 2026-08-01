@@ -68,7 +68,9 @@ def main() -> int:
         "LW_PPOCR_PORT": str(args.port),
         "LW_PPOCR_API_KEY": "",
         "LW_PPOCR_WORKER_THREADS": "2",
+        "LW_PPOCR_CONSOLE_LOGGING_ENABLED": "false",
         "LW_PPOCR_FILE_LOGGING_ENABLED": "false",
+        "LW_PPOCR_ACCESS_FILE_LOGGING_ENABLED": "false",
     })
     process = None
     completed = False
@@ -118,20 +120,26 @@ def main() -> int:
         assert health["ok"] and health["backend"] == "opencv-dnn"
         assert ocr["ok"] and ocr["result"] and ocr["result"][0]["text"]
         assert binary_ocr["ok"] and binary_ocr["result"]
-        legacy_box_keys = {
+        coordinate_keys = {
             f"{axis}{index}" for axis in ("x", "y") for index in range(1, 5)
         }
+        ocr_result_keys = coordinate_keys | {
+            "text", "score", "cls_label", "cls_score"
+        }
         for item in ocr["result"]:
-            assert isinstance(item.get("box"), list) and len(item["box"]) == 4
-            assert all(
-                isinstance(point, dict) and
-                isinstance(point.get("x"), (int, float)) and
-                isinstance(point.get("y"), (int, float))
-                for point in item["box"])
-            assert legacy_box_keys.isdisjoint(item)
+            assert set(item) == ocr_result_keys
+            assert all(isinstance(item.get(key), (int, float))
+                for key in coordinate_keys)
+            assert "box" not in item
         assert recognize["ok"] and recognize["result"]
         assert binary_recognize["ok"] and binary_recognize["result"]
         assert batch["ok"] and len(batch["result"]) == 2
+        recognition_result_keys = {
+            "source_index", "text", "score", "cls_label", "cls_score"
+        }
+        assert all(set(item) == recognition_result_keys
+            for item in recognize["result"] + binary_recognize["result"] +
+            batch["result"])
         assert bad_image_status == 400
         print(json.dumps({
             "health": health["status"],
@@ -159,10 +167,11 @@ def main() -> int:
                 output = process.stdout.read()
                 assert "758616458" not in output
                 if completed:
-                    assert "request_started" in output
                     assert f"port: {args.port}" in output
                     assert "worker_threads: 2" in output
+                    assert "logging.console: false" in output
                     assert "logging.file_enabled: false" in output
+                    assert "logging.access_file_enabled: false" in output
                 print("--- service output ---")
                 print(output)
         config_path.unlink(missing_ok=True)

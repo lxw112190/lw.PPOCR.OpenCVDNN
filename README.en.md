@@ -6,7 +6,7 @@ A small, cross-platform PP-OCR inference project powered exclusively by **OpenCV
 
 The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the CPU. Paddle Runtime, ONNX Runtime, DirectML, OpenVINO, and TensorRT are not required.
 
-> Current version: `v0.3.0`. C ABI v1 and model-manifest Schema v1 are frozen and protected by cross-platform CI checks.
+> Current version: `v0.4.0`. C ABI v1 and model-manifest Schema v1 remain frozen; this release focuses on production logging and request diagnostics.
 
 ## Features
 
@@ -14,9 +14,10 @@ The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the C
 - Recognition only: skips detection for pre-cropped text-line images; batches of 1–256 images are supported.
 - C API: accepts encoded JPEG/PNG/BMP image bytes and returns UTF-8 JSON.
 - C, C# P/Invoke, and Python ctypes examples.
-- HTTP endpoints support direct binary image uploads and compatible JSON/Base64 requests through `/api/ocr`, `/api/recognize`, and `/health`.
+- HTTP endpoints support direct binary image uploads and compatible JSON/Base64 requests through `/api/ocr`, `/api/recognize`, and `/health`; the `result` field matches `lw.PPOCR.Inference`.
 - Browser page with detected regions, confidence scores, and stage timings.
 - Optional API Key; runtime and request logging can be controlled independently.
+- Nginx-inspired log operations: split runtime/access logs, JSON Lines, request IDs, stage timings, trusted proxies, and privacy safeguards.
 - Docker and Docker Compose with a non-root Linux x64 image, health checks, persistent logs, and GHCR publishing.
 - Golden correctness regression for text order, orientation labels, confidence, and bounding-box tolerance.
 - Automated compatibility checks for C ABI v1 exports and layouts and model-manifest Schema v1.
@@ -47,12 +48,12 @@ Open <http://127.0.0.1:8787/>. Startup output always shows the author, QQ contac
 
 ### Docker / Docker Compose
 
-`v0.3.0` provides a `linux/amd64` image. After publication:
+`v0.4.0` provides a `linux/amd64` image. After publication:
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.3.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0
 ```
 
 With Compose:
@@ -136,7 +137,9 @@ The service never logs API Keys, Base64 image data, request bodies, or recognize
 
 ### Logging
 
-The `logging` object in `http-service.json` controls console and rotating-file logs. Set `enabled=false` to disable spdlog entirely, or `request_enabled=false` to keep runtime logs while disabling per-request records. Each request writes and flushes a `request_started` breadcrumb before inference, followed by status, timing, and result count. Caught failures, `std::terminate`, and Windows unhandled-exception code/address are recorded on a best-effort basis.
+v0.4.0 separates human-readable runtime diagnostics in `logs/runtime.log` from one-JSON-object-per-line OCR access records in `logs/access.log`. Access records include the request ID, status, input/output sizes, image dimensions, stage timings, and stable error codes. Every OCR response returns the same ID in its JSON body and `X-Request-ID` header.
+
+Set `enabled=false` to disable spdlog entirely, or `request_enabled=false` to keep runtime logs while disabling access records and request-start breadcrumbs. With `request_start_enabled=true`, the service explicitly flushes a `request_started` record before inference; access records are periodically flushed according to `flush_interval_seconds`. `X-Forwarded-For` is ignored unless the immediate proxy IP is explicitly listed in `trusted_proxies`. Caught failures, `std::terminate`, and Windows unhandled-exception code/address are recorded on a best-effort basis.
 
 Logs are not crash dumps and cannot guarantee a final write after power loss, `kill -9`, or severe memory corruption. See [docs/LOGGING.md](docs/LOGGING.md) for recommended Windows dump and Linux core-dump setup.
 

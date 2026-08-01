@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 0.3.0
+  PACKAGE_VERSION: 0.4.0
 
 jobs:
   windows-x64:
@@ -33,7 +33,8 @@ jobs:
         run: |
           @("scripts/package_windows.ps1", "scripts/http_smoke.py", `
             "scripts/http_stress.py", "scripts/ocr_regression.py", `
-            "scripts/check_abi.py", "scripts/validate_model_manifest.py") | ForEach-Object {
+            "scripts/logging_smoke.py", "scripts/check_abi.py", `
+            "scripts/validate_model_manifest.py") | ForEach-Object {
             if (-not (Test-Path -LiteralPath $_ -PathType Leaf)) {
               throw "Required repository script is missing: $_"
             }
@@ -124,6 +125,9 @@ jobs:
           python scripts/validate_model_manifest.py `
             --manifest "$package/models/ppocrv6-tiny/model.json" --require-sha256
           python scripts/http_smoke.py --package-dir $package --port 18787
+          python scripts/logging_smoke.py --package-dir $package --port 18785
+          python scripts/logging_smoke.py --package-dir $package --port 18783 `
+            --access-format text
           python scripts/ocr_regression.py --package-dir $package `
             --cases tests/regression/ppocrv6-tiny.json --port 18786
           python scripts/check_abi.py `

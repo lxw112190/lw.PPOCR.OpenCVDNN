@@ -23,8 +23,14 @@
     "level": "info",
     "console": true,
     "file_enabled": true,
-    "file_path": "logs/lw-ppocr.log",
+    "file_path": "logs/runtime.log",
     "request_enabled": true,
+    "request_start_enabled": true,
+    "access_file_enabled": true,
+    "access_file_path": "logs/access.log",
+    "access_format": "jsonl",
+    "flush_interval_seconds": 1,
+    "trusted_proxies": [],
     "max_file_size_mb": 10,
     "max_files": 5
   }

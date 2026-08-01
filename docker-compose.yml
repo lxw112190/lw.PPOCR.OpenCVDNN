@@ -1,6 +1,6 @@
 services:
   ppocr:
-    image: ${PPOCR_IMAGE:-ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.3.0}
+    image: ${PPOCR_IMAGE:-ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.4.0}
     ports:
       - "${PPOCR_PORT:-8787}:8787"
     environment:
@@ -9,10 +9,16 @@ services:
       LW_PPOCR_API_KEY: "${PPOCR_API_KEY:-}"
       LW_PPOCR_ENGINE_INSTANCES: "${PPOCR_ENGINE_INSTANCES:-1}"
       LW_PPOCR_WORKER_THREADS: "${PPOCR_WORKER_THREADS:-4}"
-      LW_PPOCR_LOG_FILE: "/data/logs/lw-ppocr.log"
+      LW_PPOCR_LOG_FILE: "/data/logs/runtime.log"
+      LW_PPOCR_ACCESS_LOG_FILE: "/data/logs/access.log"
       LW_PPOCR_LOGGING_ENABLED: "${PPOCR_LOGGING_ENABLED:-true}"
       LW_PPOCR_FILE_LOGGING_ENABLED: "${PPOCR_FILE_LOGGING_ENABLED:-true}"
       LW_PPOCR_REQUEST_LOGGING_ENABLED: "${PPOCR_REQUEST_LOGGING_ENABLED:-true}"
+      LW_PPOCR_REQUEST_START_LOGGING_ENABLED: "${PPOCR_REQUEST_START_LOGGING_ENABLED:-true}"
+      LW_PPOCR_ACCESS_FILE_LOGGING_ENABLED: "${PPOCR_ACCESS_FILE_LOGGING_ENABLED:-true}"
+      LW_PPOCR_ACCESS_LOG_FORMAT: "${PPOCR_ACCESS_LOG_FORMAT:-jsonl}"
+      LW_PPOCR_LOG_FLUSH_INTERVAL_SECONDS: "${PPOCR_LOG_FLUSH_INTERVAL_SECONDS:-1}"
+      LW_PPOCR_TRUSTED_PROXIES: "${PPOCR_TRUSTED_PROXIES:-}"
     volumes:
       - ppocr-logs:/data/logs
     read_only: true

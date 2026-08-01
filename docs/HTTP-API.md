@@ -1,5 +1,9 @@
 # HTTP API
 
+All OCR responses include an `X-Request-ID` header. The same value is present
+in the JSON `request_id` field and can be used to locate the corresponding
+runtime and access logs. `/health` also includes this header.
+
 Default base URL: `http://127.0.0.1:8787`
 
 If `api_key` is configured, add `X-API-Key: <secret>` to every OCR request.
@@ -34,9 +38,9 @@ Compatible JSON/Base64 request:
 The response contains the source image size, ordered text regions, four-point
 boxes, confidence scores, stage timings, and a request ID.
 
-Each detected region uses one canonical `box` field. Its four points are in
-source-image pixel coordinates and ordered as top-left, top-right,
-bottom-right, and bottom-left:
+Each detected region uses the same flattened coordinate fields as
+`lw.PPOCR.Inference`. The four points are in source-image pixel coordinates and
+ordered as top-left, top-right, bottom-right, and bottom-left:
 
 ```json
 {
@@ -44,16 +48,18 @@ bottom-right, and bottom-left:
   "score": 0.9263,
   "cls_label": 0,
   "cls_score": 0.9999,
-  "box": [
-    {"x": 256.19, "y": 2638.31},
-    {"x": 944.79, "y": 2641.89},
-    {"x": 944.52, "y": 2696.29},
-    {"x": 255.92, "y": 2692.71}
-  ]
+  "x1": 256.19,
+  "y1": 2638.31,
+  "x2": 944.79,
+  "y2": 2641.89,
+  "x3": 944.52,
+  "y3": 2696.29,
+  "x4": 255.92,
+  "y4": 2692.71
 }
 ```
 
-The legacy flattened `x1`...`x4` and `y1`...`y4` fields are not emitted.
+The redundant `box` array is not emitted.
 
 ## `POST /api/recognize`
 
