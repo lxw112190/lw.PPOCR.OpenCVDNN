@@ -5,7 +5,8 @@
   "family": "PP-OCRv6",
   "language": "ch",
   "dictionary": {
-    "path": "ppocr_keys.txt"
+    "path": "ppocr_keys.txt",
+    "sha256": "46e1b34ef45684cb46d75ac76d355341fe7f0a2c38d6ee02e63ae6b3878019fc"
   },
   "stages": {
     "detector": {
@@ -16,7 +17,8 @@
         "onnx": {
           "path": "det.onnx",
           "format": "onnx",
-          "precision": "fp32"
+          "precision": "fp32",
+          "sha256": "193bab7a04fca699a6c82e6abb5b81bdb28177f0abd4062552b04908dafb19f8"
         }
       }
     },
@@ -26,7 +28,8 @@
         "onnx": {
           "path": "cls.onnx",
           "format": "onnx",
-          "precision": "fp32"
+          "precision": "fp32",
+          "sha256": "dd8b2b61983d76ab230a58da9e0e0e84956b71c3877f2ce6e438fe22d74d2cf2"
         }
       }
     },
@@ -38,7 +41,8 @@
         "onnx": {
           "path": "rec.onnx",
           "format": "onnx",
-          "precision": "fp32"
+          "precision": "fp32",
+          "sha256": "9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6"
         }
       }
     }

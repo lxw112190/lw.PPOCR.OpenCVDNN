@@ -14,7 +14,7 @@ concurrency:
 
 env:
   OPENCV_VERSION: 5.0.0
-  PACKAGE_VERSION: 0.2.0
+  PACKAGE_VERSION: 0.3.0
 
 jobs:
   ubuntu-20-04:
@@ -76,7 +76,11 @@ jobs:
       - name: Configure and build
         run: |
           bash -n deploy/linux/*.sh scripts/package_linux.sh
-          python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py
+          python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py \
+            scripts/ocr_regression.py scripts/check_abi.py \
+            scripts/validate_model_manifest.py
+          python3 scripts/validate_model_manifest.py \
+            --manifest models/ppocrv6-tiny/model.json --require-sha256
           config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0" -name OpenCVConfig.cmake -print -quit)"
           test -n "$config"
           echo "OpenCV_DIR=$(dirname "$config")" >> "$GITHUB_ENV"
@@ -99,9 +103,17 @@ jobs:
                         stop-service.sh restart-service.sh; do
             test -x "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64/$script"
           done
+          python3 scripts/validate_model_manifest.py \
+            --manifest "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64/models/ppocrv6-tiny/model.json" \
+            --require-sha256
           python3 scripts/http_smoke.py \
             --package-dir "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64" \
             --port 18787
+          python3 scripts/ocr_regression.py \
+            --package-dir "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64" \
+            --cases tests/regression/ppocrv6-tiny.json --port 18786
+          python3 scripts/check_abi.py \
+            --library "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64/liblw.PPOCR.OpenCVDNN.so"
           python3 scripts/http_stress.py \
             --package-dir "dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-linux-x64" \
             --iterations 64 --concurrency 2 --port 18788

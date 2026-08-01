@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/lxw112190/lw.PPOCR.OpenCVDNN/main/models/model-manifest.schema.json",
+  "$id": "https://raw.githubusercontent.com/lxw112190/lw.PPOCR.OpenCVDNN/v0.3.0/models/model-manifest.schema.json",
   "title": "lw.PPOCR.OpenCVDNN model manifest",
   "type": "object",
   "additionalProperties": false,

@@ -6,14 +6,21 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 18 * * *"
   workflow_dispatch:
+    inputs:
+      stress_iterations:
+        description: "HTTP stability iterations (64 by default)"
+        required: false
+        default: "64"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 0.2.0
+  PACKAGE_VERSION: 0.3.0
 
 jobs:
   windows-x64:
@@ -25,11 +32,14 @@ jobs:
         shell: pwsh
         run: |
           @("scripts/package_windows.ps1", "scripts/http_smoke.py", `
-            "scripts/http_stress.py") | ForEach-Object {
+            "scripts/http_stress.py", "scripts/ocr_regression.py", `
+            "scripts/check_abi.py", "scripts/validate_model_manifest.py") | ForEach-Object {
             if (-not (Test-Path -LiteralPath $_ -PathType Leaf)) {
               throw "Required repository script is missing: $_"
             }
           }
+          python scripts/validate_model_manifest.py `
+            --manifest models/ppocrv6-tiny/model.json --require-sha256
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -111,9 +121,22 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
             scripts/package_windows.ps1 -PackageDir $package
           if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed" }
+          python scripts/validate_model_manifest.py `
+            --manifest "$package/models/ppocrv6-tiny/model.json" --require-sha256
           python scripts/http_smoke.py --package-dir $package --port 18787
+          python scripts/ocr_regression.py --package-dir $package `
+            --cases tests/regression/ppocrv6-tiny.json --port 18786
+          python scripts/check_abi.py `
+            --library "$package/lw.PPOCR.OpenCVDNN.dll"
+          $iterations = 64
+          if ("${{ github.event_name }}" -eq "schedule") {
+            $iterations = 5000
+          } elseif ("${{ inputs.stress_iterations }}" -match "^[1-9][0-9]*$") {
+            $iterations = [int]"${{ inputs.stress_iterations }}"
+          }
+          Write-Output "HTTP stability iterations: $iterations"
           python scripts/http_stress.py --package-dir $package `
-            --iterations 64 --concurrency 2 --port 18788
+            --iterations $iterations --concurrency 4 --port 18788
 
       - uses: actions/upload-artifact@v7
         with:

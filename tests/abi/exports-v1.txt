@@ -1,0 +1,10 @@
+# Stable C ABI v1 exports. Removing or renaming an entry requires ABI v2.
+lw_ppocr_config_init
+lw_ppocr_get_version
+lw_ppocr_create
+lw_ppocr_ocr_encoded
+lw_ppocr_recognize_encoded
+lw_ppocr_recognize_batch_encoded
+lw_ppocr_string_free
+lw_ppocr_get_last_error
+lw_ppocr_destroy

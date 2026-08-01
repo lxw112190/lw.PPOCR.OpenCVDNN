@@ -1,6 +1,6 @@
 services:
   ppocr:
-    image: ${PPOCR_IMAGE:-ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.2.0}
+    image: ${PPOCR_IMAGE:-ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.3.0}
     ports:
       - "${PPOCR_PORT:-8787}:8787"
     environment:

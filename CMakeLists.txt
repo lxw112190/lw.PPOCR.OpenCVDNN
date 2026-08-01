@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(lw.PPOCR.OpenCVDNN VERSION 0.2.0 LANGUAGES C CXX)
+project(lw.PPOCR.OpenCVDNN VERSION 0.3.0 LANGUAGES C CXX)
 
 option(LW_PPOCR_BUILD_HTTP_SERVICE "Build the cpp-httplib HTTP service" ON)
 option(LW_PPOCR_BUILD_EXAMPLES "Build native examples" ON)
@@ -102,6 +102,20 @@ if(BUILD_TESTING AND LW_PPOCR_BUILD_TESTS)
     target_include_directories(lw-ppocr-api-test PRIVATE include)
     target_link_libraries(lw-ppocr-api-test PRIVATE lw_ppocr)
     add_test(NAME api_version COMMAND lw-ppocr-api-test)
+    add_executable(lw-ppocr-model-manifest-test
+        tests/model_manifest_test.cpp
+        src/core/model_manifest.cpp)
+    target_include_directories(lw-ppocr-model-manifest-test PRIVATE
+        src/core/include
+        third_party/nlohmann-json)
+    target_link_libraries(lw-ppocr-model-manifest-test PRIVATE ${OpenCV_LIBS})
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+       CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+        target_link_libraries(lw-ppocr-model-manifest-test PRIVATE stdc++fs)
+    endif()
+    add_test(NAME model_manifest_schema
+        COMMAND lw-ppocr-model-manifest-test
+            ${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/model.json)
 endif()
 
 include(GNUInstallDirs)
@@ -116,6 +130,7 @@ if(LW_PPOCR_BUILD_EXAMPLES)
     install(TARGETS lw-ppocr-c-example RUNTIME DESTINATION .)
 endif()
 install(FILES include/lw/ppocr.h DESTINATION include/lw)
+install(FILES models/model-manifest.schema.json DESTINATION models)
 install(DIRECTORY models/ppocrv6-tiny DESTINATION models)
 install(DIRECTORY www/ DESTINATION www)
 install(FILES http-service.json DESTINATION .)
@@ -124,6 +139,9 @@ install(FILES docs/assets/sponsor.jpg DESTINATION docs/assets)
 install(FILES docs/HTTP-API.md DESTINATION docs)
 install(FILES docs/DOCKER.md DESTINATION docs)
 install(FILES docs/LOGGING.md DESTINATION docs)
+install(FILES docs/C-ABI.md DESTINATION docs)
+install(FILES docs/MODEL-MANIFEST.md DESTINATION docs)
+install(FILES tests/abi/exports-v1.txt DESTINATION docs)
 install(DIRECTORY examples/python DESTINATION examples)
 install(DIRECTORY examples/csharp DESTINATION examples
     PATTERN "bin" EXCLUDE

@@ -6,7 +6,7 @@
 
 当前内置模型为 PP-OCRv6 Tiny Chinese，推理设备为 CPU。项目不依赖 Paddle Runtime、ONNX Runtime、DirectML、OpenVINO 或 TensorRT。
 
-> 当前版本：`v0.2.0`，公共接口处于早期验证阶段，尚未承诺 ABI 长期冻结。
+> 当前版本：`v0.3.0`。C ABI v1 与模型清单 Schema v1 已冻结，并由跨平台 CI 自动检查兼容性。
 
 ## 主要能力
 
@@ -18,6 +18,8 @@
 - 浏览器体验页：显示识别文本、置信度、阶段耗时，并在原图绘制文字区域。
 - 可选 API Key；运行日志和请求日志可分别开关。
 - Docker / Docker Compose：Linux x64 非 root 镜像、健康检查、持久化日志和 GHCR 发布。
+- 正确性回归：固定样图、文字顺序、方向分类、置信度与检测框容差均有黄金基线。
+- 接口契约：C ABI v1 导出符号、结构布局与模型清单 Schema v1 自动防回退。
 - Windows x64、Linux x64、macOS ARM64 CI；核心代码不包含平台专用推理逻辑。
 
 ## 快速使用 HTTP 服务
@@ -48,12 +50,12 @@ chmod +x run-http-service.sh
 
 ### Docker / Docker Compose
 
-`v0.2.0` 提供 `linux/amd64` 容器镜像。发布后可直接运行：
+`v0.3.0` 提供 `linux/amd64` 容器镜像。发布后可直接运行：
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.2.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:0.3.0
 ```
 
 使用 Compose：
@@ -175,7 +177,7 @@ X-API-Key: replace-with-a-long-random-secret
 5. 用 `lw_ppocr_string_free` 释放 JSON
 6. `lw_ppocr_destroy`
 
-完整示例见 [examples/c/main.c](examples/c/main.c)、[examples/csharp](examples/csharp) 和 [examples/python/ocr.py](examples/python/ocr.py)。
+完整示例见 [examples/c/main.c](examples/c/main.c)、[examples/csharp](examples/csharp) 和 [examples/python/ocr.py](examples/python/ocr.py)。C ABI v1 的兼容规则见 [docs/C-ABI.md](docs/C-ABI.md)，模型清单 Schema v1 的字段、校验与升级规则见 [docs/MODEL-MANIFEST.md](docs/MODEL-MANIFEST.md)。
 
 C# 示例使用 .NET 8，通过同一套 C ABI 在 Windows/Linux 上调用：
 
@@ -202,7 +204,7 @@ cmake --install build --config Release --prefix dist/package
 
 Windows 使用 DLL，Linux 使用 `.so`，macOS 使用 `.dylib`。CI 发布包按“解压即可运行”整理：包含 OCR Runtime、OpenCV、模型、配置、网页和示例；Windows 额外包含 VC143 x64 运行库，Linux 额外包含 `libstdc++.so.6` 与 `libgcc_s.so.1`，图像编解码依赖静态编入 OpenCV。glibc、Linux 动态加载器、Windows 系统 DLL 和 macOS 系统框架不随包分发，目标机仍需满足发布包标注的系统与架构基线。
 
-Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。三套原生工作流都会执行单元测试、真实 OCR、HTTP 冒烟测试，以及多尺寸图片并发、异常请求和 RSS 内存增长测试。Docker 工作流额外验证非 root 运行、Compose、健康检查、API Key 和二进制 OCR；推送正式 `v*` 标签时才会发布 GHCR 镜像。所有发布附件均包含 SHA-256 校验文件。
+Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相同缓存键的构建会直接复用；Windows CI 缓存官方预编译包的解压目录。三套原生工作流都会执行单元测试、模型文件 SHA-256、C ABI 导出、黄金正确性回归、HTTP 冒烟测试，以及多尺寸图片并发、异常请求和 RSS 内存增长测试。Windows 工作流每天定时执行 5000 次长测，普通提交执行 64 次快速稳定性检查。Docker 工作流额外验证非 root 运行、Compose、健康检查、API Key 和二进制 OCR；推送正式 `v*` 标签时才会发布 GHCR 镜像。所有发布附件均包含 SHA-256 校验文件。
 
 ## 并发建议
 

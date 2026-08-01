@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "model": "PP-OCRv6 tiny Chinese",
+  "cases": [
+    {
+      "id": "ppocrv6-tiny-sample-full-ocr",
+      "image": "models/ppocrv6-tiny/sample.jpg",
+      "image_sha256": "30c417c9f758a3b62718729f5a944f7d2e10cdd2bde0e8ce6785523ddb68ffe9",
+      "endpoint": "/api/ocr",
+      "image_size": [500, 500],
+      "minimum_score": 0.85,
+      "box_tolerance_px": 5.0,
+      "expected": [
+        {"text": "纯臻营养护发素", "cls_label": 0, "bounds": [22.46, 32.23, 307.62, 75.20]},
+        {"text": "产品信息/参数", "cls_label": 0, "bounds": [22.46, 78.13, 176.76, 104.49]},
+        {"text": "(45元/每公斤，100公斤起订)", "cls_label": 0, "bounds": [23.44, 109.37, 336.91, 134.77]},
+        {"text": "每瓶22元，1000瓶起订）", "cls_label": 0, "bounds": [24.41, 141.60, 286.13, 164.06]},
+        {"text": "【品牌】：代加工方式/OEM ODM", "cls_label": 0, "bounds": [23.44, 174.80, 302.73, 197.27]},
+        {"text": "【品名】：纯臻营养护发素", "cls_label": 0, "bounds": [23.44, 206.05, 237.30, 228.52]},
+        {"text": "【产品编号】：YM-X-3011", "cls_label": 0, "bounds": [24.41, 238.28, 243.16, 257.81]},
+        {"text": "ODM OEM", "cls_label": 1, "bounds": [413.09, 232.42, 429.69, 302.73]},
+        {"text": "【净含量】：220ml", "cls_label": 0, "bounds": [23.44, 268.55, 182.62, 291.02]},
+        {"text": "【适用人群】：适合所有肤质", "cls_label": 0, "bounds": [23.37, 298.80, 254.95, 322.30]},
+        {"text": "【主要成分】：鲸蜡硬脂醇、燕麦β-葡聚", "cls_label": 0, "bounds": [23.39, 331.03, 346.73, 354.51]},
+        {"text": "糖、椰油酰胺丙基甜菜碱、泛醌", "cls_label": 0, "bounds": [25.39, 364.26, 284.18, 383.79]},
+        {"text": "(成品包材)", "cls_label": 0, "bounds": [366.21, 366.21, 476.56, 388.67]},
+        {"text": "【主要功能】：可紧致头发磷层，从而达到", "cls_label": 0, "bounds": [23.44, 393.55, 363.28, 416.02]},
+        {"text": "即时持久改善头发光泽的效果，给干燥的头", "cls_label": 0, "bounds": [25.39, 426.76, 374.02, 446.29]},
+        {"text": "发足够的滋养", "cls_label": 0, "bounds": [24.41, 456.05, 137.70, 478.52]}
+      ]
+    }
+  ]
+}

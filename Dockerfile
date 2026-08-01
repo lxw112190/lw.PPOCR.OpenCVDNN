@@ -42,7 +42,9 @@ RUN mkdir -p /tmp/opencv-source /tmp/opencv-build /opt/opencv && \
 
 WORKDIR /src
 COPY . .
-RUN config="$(find /opt/opencv -name OpenCVConfig.cmake -print -quit)" && \
+RUN python3 scripts/validate_model_manifest.py \
+      --manifest models/ppocrv6-tiny/model.json --require-sha256 && \
+    config="$(find /opt/opencv -name OpenCVConfig.cmake -print -quit)" && \
     test -n "$config" && \
     cmake -S . -B build/docker -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DOpenCV_DIR="$(dirname "$config")" && \
@@ -60,7 +62,7 @@ RUN config="$(find /opt/opencv -name OpenCVConfig.cmake -print -quit)" && \
 
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
-ARG VERSION=0.2.0
+ARG VERSION=0.3.0
 LABEL org.opencontainers.image.title="lw.PPOCR.OpenCVDNN" \
       org.opencontainers.image.description="Cross-platform PP-OCR HTTP service powered by OpenCV DNN" \
       org.opencontainers.image.version="${VERSION}" \

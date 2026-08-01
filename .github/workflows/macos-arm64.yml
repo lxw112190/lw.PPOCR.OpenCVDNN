@@ -14,7 +14,7 @@ concurrency:
 
 env:
   OPENCV_VERSION: 5.0.0
-  PACKAGE_VERSION: 0.2.0
+  PACKAGE_VERSION: 0.3.0
   MACOSX_DEPLOYMENT_TARGET: "12.0"
 
 jobs:
@@ -73,6 +73,11 @@ jobs:
       - name: Configure and build
         run: |
           bash -n scripts/package_macos.sh
+          python3 -m py_compile scripts/http_smoke.py scripts/http_stress.py \
+            scripts/ocr_regression.py scripts/check_abi.py \
+            scripts/validate_model_manifest.py
+          python3 scripts/validate_model_manifest.py \
+            --manifest models/ppocrv6-tiny/model.json --require-sha256
           config="$(find "$GITHUB_WORKSPACE/.ci/opencv-5.0.0" \
             -name OpenCVConfig.cmake -print -quit)"
           test -n "$config"
@@ -95,7 +100,13 @@ jobs:
             "$PACKAGE_VERSION"
           package="dist/lw.PPOCR.OpenCVDNN-v${PACKAGE_VERSION}-macos-arm64"
           file "$package/lw-ppocr-http-service" | grep -q arm64
+          python3 scripts/validate_model_manifest.py \
+            --manifest "$package/models/ppocrv6-tiny/model.json" --require-sha256
           python3 scripts/http_smoke.py --package-dir "$package" --port 18787
+          python3 scripts/ocr_regression.py --package-dir "$package" \
+            --cases tests/regression/ppocrv6-tiny.json --port 18786
+          python3 scripts/check_abi.py \
+            --library "$package/liblw.PPOCR.OpenCVDNN.dylib"
           python3 scripts/http_stress.py --package-dir "$package" \
             --iterations 64 --concurrency 2 --port 18788
           otool -L "$package/lw-ppocr-http-service"
