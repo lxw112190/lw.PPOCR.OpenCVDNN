@@ -117,6 +117,8 @@ jobs:
             --prefix build/sanitizer-package
 
       - name: HTTP, malformed input, and recovery tests
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/.ci/opencv-5.0.0/lib
         run: |
           python3 scripts/config_contract_test.py \
             --package-dir build/sanitizer-package
