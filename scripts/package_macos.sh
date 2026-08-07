@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-  echo "Usage: $0 <build-dir> <opencv-prefix> <output-dir> <version>" >&2
+if [[ $# -lt 4 || $# -gt 5 ]]; then
+  echo "Usage: $0 <build-dir> <opencv-prefix> <output-dir> <version> [pdfium-dylib]" >&2
   exit 2
 fi
 
@@ -11,6 +11,7 @@ opencv_prefix="$(cd "$2" && pwd)"
 mkdir -p "$3"
 output_dir="$(cd "$3" && pwd)"
 version="$4"
+pdfium_dylib="${5:-}"
 
 case "$(uname -m)" in
   arm64) architecture="arm64" ;;
@@ -27,6 +28,10 @@ if [[ -e "$package_dir" ]]; then
 fi
 
 cmake --install "$build_dir" --prefix "$package_dir"
+if [[ -n "$pdfium_dylib" ]]; then
+  [[ -f "$pdfium_dylib" ]] || { echo "PDFium library not found: $pdfium_dylib" >&2; exit 1; }
+  cp -L "$pdfium_dylib" "$package_dir/libpdfium.dylib"
+fi
 find "$opencv_prefix/lib" -maxdepth 1 \
   \( -type f -o -type l \) -name 'libopencv*.dylib' \
   -exec cp -P '{}' "$package_dir/" \;
@@ -54,6 +59,11 @@ for binary in "$package_dir/lw-ppocr-http-service" \
     exit 1
   fi
 done
+if [[ -f "$package_dir/libpdfium.dylib" ]] && \
+   otool -L "$package_dir/libpdfium.dylib" | grep -F 'not found'; then
+  echo "Unresolved shared-library dependency in $package_dir/libpdfium.dylib" >&2
+  exit 1
+fi
 
 # Ad-hoc signing avoids invalid signatures after packaging while keeping the
 # archive independent from a project-specific Apple Developer certificate.

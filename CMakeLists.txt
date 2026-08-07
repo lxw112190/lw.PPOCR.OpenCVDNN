@@ -8,6 +8,8 @@ option(LW_PPOCR_BUILD_HTTP_SERVICE "Build the cpp-httplib HTTP service" ON)
 option(LW_PPOCR_BUILD_EXAMPLES "Build native examples" ON)
 option(LW_PPOCR_BUILD_TESTS "Build tests" ON)
 option(LW_PPOCR_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+set(LW_PPOCR_PDFIUM_LIBRARY "" CACHE FILEPATH
+    "Optional PDFium runtime library to install with the package")
 
 function(lw_ppocr_enable_sanitizers target)
     if(NOT LW_PPOCR_ENABLE_SANITIZERS)
@@ -51,6 +53,7 @@ add_library(lw_ppocr SHARED
     src/core/model_manifest.cpp
     src/core/image_ops.cpp
     src/core/db_postprocessor.cpp
+    src/pdf/pdfium_adapter.cpp
     third_party/clipper/clipper.cpp)
 
 target_compile_definitions(lw_ppocr PRIVATE LW_PPOCR_BUILDING_LIBRARY)
@@ -64,6 +67,9 @@ target_include_directories(lw_ppocr
         third_party/clipper
         third_party/nlohmann-json)
 target_link_libraries(lw_ppocr PRIVATE ${OpenCV_LIBS} Threads::Threads)
+if(UNIX)
+    target_link_libraries(lw_ppocr PRIVATE ${CMAKE_DL_LIBS})
+endif()
 lw_ppocr_enable_sanitizers(lw_ppocr)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
    CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
@@ -98,6 +104,7 @@ if(LW_PPOCR_BUILD_HTTP_SERVICE)
         src/http/logging.cpp)
     target_include_directories(lw-ppocr-http-service PRIVATE
         include
+        ${OpenCV_INCLUDE_DIRS}
         src/http
         third_party/cpp-httplib
         third_party/nlohmann-json
@@ -122,12 +129,68 @@ if(LW_PPOCR_BUILD_EXAMPLES)
 endif()
 
 include(CTest)
+
+# Resolve a repository-provided PDFium before defining tests so the optional
+# integration test can run automatically when the matching binary is present.
+if(NOT LW_PPOCR_PDFIUM_LIBRARY)
+    if(WIN32)
+        set(_lw_ppocr_pdfium_candidate
+            "${CMAKE_SOURCE_DIR}/third_party/pdfium/windows-x64/pdfium.dll")
+        set(_lw_ppocr_pdfium_name "pdfium.dll")
+    elseif(APPLE)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
+            set(_lw_ppocr_pdfium_arch "macos-arm64")
+        elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+            set(_lw_ppocr_pdfium_arch "macos-x64")
+        endif()
+        if(_lw_ppocr_pdfium_arch)
+            set(_lw_ppocr_pdfium_candidate
+                "${CMAKE_SOURCE_DIR}/third_party/pdfium/${_lw_ppocr_pdfium_arch}/libpdfium.dylib")
+        endif()
+        set(_lw_ppocr_pdfium_name "libpdfium.dylib")
+    elseif(UNIX)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+            set(_lw_ppocr_pdfium_arch "linux-x64")
+        elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+            set(_lw_ppocr_pdfium_arch "linux-arm64")
+        endif()
+        if(_lw_ppocr_pdfium_arch)
+            set(_lw_ppocr_pdfium_candidate
+                "${CMAKE_SOURCE_DIR}/third_party/pdfium/${_lw_ppocr_pdfium_arch}/libpdfium.so")
+        endif()
+        set(_lw_ppocr_pdfium_name "libpdfium.so")
+    endif()
+    if(_lw_ppocr_pdfium_candidate AND EXISTS "${_lw_ppocr_pdfium_candidate}")
+        set(LW_PPOCR_PDFIUM_LIBRARY "${_lw_ppocr_pdfium_candidate}")
+    endif()
+endif()
+
 if(BUILD_TESTING AND LW_PPOCR_BUILD_TESTS)
     add_executable(lw-ppocr-api-test tests/api_test.cpp)
     target_include_directories(lw-ppocr-api-test PRIVATE include)
     target_link_libraries(lw-ppocr-api-test PRIVATE lw_ppocr)
     lw_ppocr_enable_sanitizers(lw-ppocr-api-test)
     add_test(NAME api_version COMMAND lw-ppocr-api-test)
+    add_executable(lw-ppocr-pdf-adapter-test
+        tests/pdf_adapter_test.cpp
+        src/pdf/pdfium_adapter.cpp)
+    target_include_directories(lw-ppocr-pdf-adapter-test PRIVATE
+        ${OpenCV_INCLUDE_DIRS}
+        src/pdf)
+    target_link_libraries(lw-ppocr-pdf-adapter-test PRIVATE
+        ${OpenCV_LIBS} Threads::Threads)
+    if(UNIX)
+        target_link_libraries(lw-ppocr-pdf-adapter-test PRIVATE ${CMAKE_DL_LIBS})
+    endif()
+    lw_ppocr_enable_sanitizers(lw-ppocr-pdf-adapter-test)
+    add_test(NAME pdf_adapter
+        COMMAND lw-ppocr-pdf-adapter-test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/pdf-text-sample.pdf)
+    set_tests_properties(pdf_adapter PROPERTIES SKIP_RETURN_CODE 77)
+    if(LW_PPOCR_PDFIUM_LIBRARY)
+        set_tests_properties(pdf_adapter PROPERTIES
+            ENVIRONMENT "LW_PPOCR_PDFIUM_LIBRARY=${LW_PPOCR_PDFIUM_LIBRARY}")
+    endif()
     add_executable(lw-ppocr-engine-pool-test
         tests/engine_pool_test.cpp
         src/http/engine_pool.cpp
@@ -195,6 +258,7 @@ install(FILES docs/DOCKER.md DESTINATION docs)
 install(FILES docs/LINUX-ARM64-UOS20.md DESTINATION docs)
 install(FILES docs/LOGGING.md DESTINATION docs)
 install(FILES docs/C-ABI.md DESTINATION docs)
+install(FILES docs/PDF-OCR.md DESTINATION docs)
 install(FILES docs/MODEL-MANIFEST.md DESTINATION docs)
 install(FILES docs/COMPATIBILITY.md DESTINATION docs)
 install(FILES docs/CONTRACTS.md DESTINATION docs)
@@ -259,4 +323,21 @@ endif()
 if(WIN32)
     install(FILES $<TARGET_RUNTIME_DLLS:lw-ppocr-http-service>
         DESTINATION . OPTIONAL)
+endif()
+
+if(LW_PPOCR_PDFIUM_LIBRARY)
+    if(NOT EXISTS "${LW_PPOCR_PDFIUM_LIBRARY}")
+        message(FATAL_ERROR "LW_PPOCR_PDFIUM_LIBRARY does not exist: ${LW_PPOCR_PDFIUM_LIBRARY}")
+    endif()
+    if(NOT _lw_ppocr_pdfium_name)
+        if(WIN32)
+            set(_lw_ppocr_pdfium_name "pdfium.dll")
+        elseif(APPLE)
+            set(_lw_ppocr_pdfium_name "libpdfium.dylib")
+        else()
+            set(_lw_ppocr_pdfium_name "libpdfium.so")
+        endif()
+    endif()
+    install(FILES "${LW_PPOCR_PDFIUM_LIBRARY}" DESTINATION .
+        RENAME "${_lw_ppocr_pdfium_name}")
 endif()

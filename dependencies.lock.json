@@ -98,6 +98,32 @@
       ]
     },
     {
+      "bom_ref": "pkg:npm/pdfjs-dist@5.6.205",
+      "type": "library",
+      "name": "pdfjs-dist",
+      "version": "5.6.205",
+      "license": "Apache-2.0",
+      "purl": "pkg:npm/pdfjs-dist@5.6.205",
+      "source_url": "https://github.com/mozilla/pdf.js",
+      "paths": ["www/pdfjs"],
+      "tree_sha256": "fc6d3fea45545fa44aa23f398cb05117d9eb3ef0ecee34bf049db066e60c1011",
+      "license_file": "licenses/pdfjs/LICENSE",
+      "version_markers": []
+    },
+    {
+      "bom_ref": "pkg:generic/pdfium@152.0.7947.0",
+      "type": "library",
+      "name": "PDFium",
+      "version": "152.0.7947.0",
+      "license": "BSD-3-Clause",
+      "purl": "pkg:generic/pdfium@152.0.7947.0",
+      "source_url": "https://pdfium.googlesource.com/pdfium/",
+      "paths": ["third_party/pdfium/windows-x64"],
+      "tree_sha256": "286fca2ef87127b72e10603b9f20eec4da419643cc8ac724fd2cedd86698f3fa",
+      "license_file": "licenses/pdfium/pdfium.txt",
+      "version_markers": []
+    },
+    {
       "bom_ref": "pkg:generic/opencv@5.0.0",
       "type": "library",
       "name": "OpenCV",

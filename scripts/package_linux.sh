@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 4 || $# -gt 5 ]]; then
-  echo "Usage: $0 <build-dir> <opencv-prefix> <output-dir> <version> [platform]" >&2
+if [[ $# -lt 4 || $# -gt 6 ]]; then
+  echo "Usage: $0 <build-dir> <opencv-prefix> <output-dir> <version> [platform] [pdfium-so]" >&2
   exit 2
 fi
 
@@ -11,6 +11,7 @@ opencv_prefix="$(realpath "$2")"
 output_dir="$(mkdir -p "$3" && realpath "$3")"
 version="$4"
 platform="${5:-x64}"
+pdfium_so="${6:-}"
 if [[ ! "$platform" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
   echo "Invalid Linux platform suffix: $platform" >&2
   exit 2
@@ -24,6 +25,10 @@ if [[ -e "$package_dir" ]]; then
 fi
 
 cmake --install "$build_dir" --prefix "$package_dir"
+if [[ -n "$pdfium_so" ]]; then
+  [[ -f "$pdfium_so" ]] || { echo "PDFium library not found: $pdfium_so" >&2; exit 1; }
+  cp -L "$pdfium_so" "$package_dir/libpdfium.so"
+fi
 find "$opencv_prefix/lib" -maxdepth 1 \
   \( -type f -o -type l \) -name 'libopencv*.so*' \
   -exec cp -P '{}' "$package_dir/" \;
@@ -92,6 +97,12 @@ for binary in "$package_dir/lw-ppocr-http-service" \
     exit 1
   fi
 done
+if [[ -f "$package_dir/libpdfium.so" ]] && \
+   LD_LIBRARY_PATH="$package_dir" ldd "$package_dir/libpdfium.so" | grep -q 'not found'; then
+  echo "Unresolved shared-library dependency in $package_dir/libpdfium.so" >&2
+  LD_LIBRARY_PATH="$package_dir" ldd "$package_dir/libpdfium.so" >&2
+  exit 1
+fi
 
 tar -C "$output_dir" -czf "${output_dir}/${package_name}.tar.gz" "$package_name"
 (cd "$output_dir" && \

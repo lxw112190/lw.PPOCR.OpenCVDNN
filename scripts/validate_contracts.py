@@ -51,7 +51,7 @@ def main() -> int:
     assert openapi.get("openapi") == "3.1.0"
     assert openapi.get("x-contract-version") == 1
     assert set(openapi.get("paths", {})) == {
-        "/health", "/api/ocr", "/api/recognize"}
+        "/health", "/api/ocr", "/api/recognize", "/api/pdf/ocr"}
     assert openapi["components"]["headers"]["ApiVersion"]["schema"] == {
         "const": "1"}
 

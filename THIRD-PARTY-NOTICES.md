@@ -11,9 +11,12 @@ This project includes or distributes the following third-party components:
 | fmt (bundled with spdlog) | Log message formatting | BSD-2-Clause |
 | Clipper | DB text-box polygon expansion | BSL-1.0 |
 | PaddleOCR models | PP-OCR model artifacts | Apache-2.0 |
+| PDFium | PDF parsing, text-layer extraction and page rendering | BSD-style license plus bundled dependency licenses |
+| pdfjs-dist (PDF.js) | Browser-side PDF page rendering for the test web page | Apache-2.0 |
 | Microsoft Visual C++ Runtime | Windows package runtime | Microsoft Software License Terms |
 | GCC libstdc++ and libgcc | Linux package runtime | GPL-3.0-or-later WITH GCC-exception-3.1 |
 
 The corresponding license texts or redistribution notices are available in
-`licenses/` and the official runtime distributions. The project license does
-not replace or modify any third-party license.
+`licenses/` (including `licenses/pdfium/`) and the official runtime
+distributions. The project license does not replace or modify any third-party
+license.

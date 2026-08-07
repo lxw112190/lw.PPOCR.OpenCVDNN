@@ -22,8 +22,8 @@
     "remote_ip": {"type": "string", "minLength": 1, "maxLength": 64},
     "peer_ip": {"type": "string", "minLength": 1, "maxLength": 64},
     "method": {"type": "string", "minLength": 1},
-    "path": {"enum": ["/api/ocr", "/api/recognize"]},
-    "operation": {"enum": ["ocr", "recognize", "recognize_batch"]},
+    "path": {"enum": ["/api/ocr", "/api/recognize", "/api/pdf/ocr"]},
+    "operation": {"enum": ["ocr", "recognize", "recognize_batch", "pdf_ocr"]},
     "content_type": {"type": "string"},
     "request_format": {"enum": ["binary", "json"]},
     "status": {"type": "integer", "minimum": 100, "maximum": 599},
@@ -32,7 +32,7 @@
     "result_count": {"type": "integer", "minimum": 0},
     "duration_ms": {"type": "number", "minimum": 0},
     "error_code": {
-      "enum": ["unauthorized", "invalid_json", "invalid_request", "payload_too_large", "internal_error"]
+      "enum": ["unauthorized", "invalid_json", "invalid_request", "invalid_pdf", "pdfium_unavailable", "pdf_limit_exceeded", "payload_too_large", "batch_limit_exceeded", "queue_full", "engine_wait_timeout", "service_stopping", "service_unavailable", "internal_error"]
     },
     "image": {
       "type": "object",

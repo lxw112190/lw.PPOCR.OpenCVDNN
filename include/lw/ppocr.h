@@ -42,7 +42,8 @@ enum {
     LW_PPOCR_STATUS_INFERENCE_ERROR = -4,
     LW_PPOCR_STATUS_OUT_OF_MEMORY = -5,
     LW_PPOCR_STATUS_INTERNAL_ERROR = -6,
-    LW_PPOCR_STATUS_LIMIT_EXCEEDED = -7
+    LW_PPOCR_STATUS_LIMIT_EXCEEDED = -7,
+    LW_PPOCR_STATUS_DOCUMENT_ERROR = -8
 };
 
 enum {
@@ -99,6 +100,27 @@ typedef struct lw_ppocr_config {
     const void* reserved_ptr[4];
 } lw_ppocr_config;
 
+enum {
+    LW_PPOCR_PDF_MODE_AUTO = 0,
+    LW_PPOCR_PDF_MODE_TEXT = 1,
+    LW_PPOCR_PDF_MODE_OCR = 2,
+    LW_PPOCR_PDF_MODE_HYBRID = 3
+};
+
+typedef struct lw_ppocr_pdf_options {
+    uint32_t struct_size;
+    uint32_t api_version;
+    uint32_t mode;
+    uint32_t dpi;
+    uint32_t first_page;
+    uint32_t page_count;
+    uint32_t max_pages;
+    uint32_t reserved_u32;
+    uint64_t max_page_pixels;
+    uint64_t max_total_pixels;
+    uint32_t reserved[4];
+} lw_ppocr_pdf_options;
+
 /* Fills a configuration with safe defaults. Set model_manifest_utf8 before create. */
 LW_PPOCR_API void LW_PPOCR_CALL lw_ppocr_config_init(lw_ppocr_config* config);
 
@@ -114,6 +136,20 @@ LW_PPOCR_API lw_ppocr_status LW_PPOCR_CALL lw_ppocr_ocr_encoded(
     lw_ppocr_handle handle,
     const uint8_t* encoded_image,
     uint64_t encoded_size,
+    char** result_json_utf8,
+    uint64_t* result_json_length);
+
+/* Runs PDF page text extraction/rendering and OCR. PDFium is loaded at runtime. */
+LW_PPOCR_API int LW_PPOCR_CALL lw_ppocr_pdfium_is_available(void);
+
+LW_PPOCR_API void LW_PPOCR_CALL lw_ppocr_pdf_options_init(
+    lw_ppocr_pdf_options* options);
+
+LW_PPOCR_API lw_ppocr_status LW_PPOCR_CALL lw_ppocr_ocr_pdf_encoded(
+    lw_ppocr_handle handle,
+    const uint8_t* pdf_data,
+    uint64_t pdf_size,
+    const lw_ppocr_pdf_options* options,
     char** result_json_utf8,
     uint64_t* result_json_length);
 

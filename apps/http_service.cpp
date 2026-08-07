@@ -79,6 +79,10 @@ struct ServiceConfig {
     size_t max_batch_images = 32;
     uint64_t max_batch_total_pixels = 40000000;
     uint64_t max_batch_decoded_bytes = 120000000;
+    uint32_t pdf_dpi = 200;
+    size_t max_pdf_pages = 10;
+    uint64_t max_pdf_page_pixels = 25000000;
+    uint64_t max_pdf_total_pixels = 100000000;
     lw::ppocr::http::LoggingConfig logging;
 };
 
@@ -142,6 +146,40 @@ std::string RequestMediaType(const httplib::Request& request) {
 bool IsBinaryImageMediaType(const std::string& media_type) {
     return media_type == "application/octet-stream" ||
         (media_type.size() >= 6 && media_type.compare(0, 6, "image/") == 0);
+}
+
+bool IsPdfMediaType(const std::string& media_type) {
+    return media_type == "application/pdf";
+}
+
+bool IsBinaryPayloadMediaType(const std::string& media_type) {
+    return IsBinaryImageMediaType(media_type) || IsPdfMediaType(media_type);
+}
+
+uint64_t QueryUnsigned(const httplib::Request& request, const char* name,
+                      uint64_t current) {
+    if (!request.has_param(name)) return current;
+    const std::string value = request.get_param_value(name);
+    size_t consumed = 0;
+    try {
+        const unsigned long long parsed = std::stoull(value, &consumed, 10);
+        if (value.empty() || consumed != value.size()) {
+            throw std::invalid_argument("trailing characters");
+        }
+        return static_cast<uint64_t>(parsed);
+    } catch (const std::exception&) {
+        throw std::invalid_argument(std::string(name) +
+            " must be an unsigned integer");
+    }
+}
+
+uint32_t QueryUint32(const httplib::Request& request, const char* name,
+                     uint32_t current) {
+    const uint64_t value = QueryUnsigned(request, name, current);
+    if (value > (std::numeric_limits<uint32_t>::max)()) {
+        throw std::invalid_argument(std::string(name) + " is out of range");
+    }
+    return static_cast<uint32_t>(value);
 }
 
 fs::path ResolvePath(const fs::path& base, const std::string& value) {
@@ -273,6 +311,14 @@ void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
     config.max_batch_decoded_bytes = EnvironmentUnsigned(
         "LW_PPOCR_MAX_BATCH_DECODED_BYTES",
         config.max_batch_decoded_bytes);
+    config.pdf_dpi = static_cast<uint32_t>(EnvironmentUnsigned(
+        "LW_PPOCR_PDF_DPI", config.pdf_dpi));
+    config.max_pdf_pages = static_cast<size_t>(EnvironmentUnsigned(
+        "LW_PPOCR_MAX_PDF_PAGES", config.max_pdf_pages));
+    config.max_pdf_page_pixels = EnvironmentUnsigned(
+        "LW_PPOCR_MAX_PDF_PAGE_PIXELS", config.max_pdf_page_pixels);
+    config.max_pdf_total_pixels = EnvironmentUnsigned(
+        "LW_PPOCR_MAX_PDF_TOTAL_PIXELS", config.max_pdf_total_pixels);
     config.logging.enabled = EnvironmentBoolean(
         "LW_PPOCR_LOGGING_ENABLED", config.logging.enabled);
     config.logging.console = EnvironmentBoolean(
@@ -330,7 +376,8 @@ ServiceConfig LoadConfig(const fs::path& path) {
         "engine_instances", "worker_threads", "max_queued_requests",
         "engine_wait_timeout_ms", "max_request_bytes", "max_image_pixels",
         "max_batch_images", "max_batch_total_pixels",
-        "max_batch_decoded_bytes", "logging"
+        "max_batch_decoded_bytes", "pdf_dpi", "max_pdf_pages",
+        "max_pdf_page_pixels", "max_pdf_total_pixels", "logging"
     }, "HTTP service configuration");
     if (!document.contains("schema_version")) {
         throw std::runtime_error(
@@ -401,6 +448,12 @@ ServiceConfig LoadConfig(const fs::path& path) {
         "max_batch_total_pixels", config.max_batch_total_pixels);
     config.max_batch_decoded_bytes = document.value(
         "max_batch_decoded_bytes", config.max_batch_decoded_bytes);
+    config.pdf_dpi = document.value("pdf_dpi", config.pdf_dpi);
+    config.max_pdf_pages = document.value("max_pdf_pages", config.max_pdf_pages);
+    config.max_pdf_page_pixels = document.value(
+        "max_pdf_page_pixels", config.max_pdf_page_pixels);
+    config.max_pdf_total_pixels = document.value(
+        "max_pdf_total_pixels", config.max_pdf_total_pixels);
 
     if (document.contains("logging")) {
         const json& logging = document.at("logging");
@@ -542,6 +595,12 @@ ServiceConfig LoadConfig(const fs::path& path) {
         config.max_batch_total_pixels > 1000000000ull ||
         config.max_batch_decoded_bytes < config.max_image_pixels * 3ull ||
         config.max_batch_decoded_bytes > 4ull * 1024ull * 1024ull * 1024ull ||
+        config.pdf_dpi < 36 || config.pdf_dpi > 600 ||
+        config.max_pdf_pages < 1 || config.max_pdf_pages > 1000 ||
+        config.max_pdf_page_pixels < 1 ||
+        config.max_pdf_page_pixels > 200000000ull ||
+        config.max_pdf_total_pixels < config.max_pdf_page_pixels ||
+        config.max_pdf_total_pixels > 1000000000ull ||
         config.logging.max_file_size < 1024u ||
         config.logging.max_files < 1 || config.logging.max_files > 100 ||
         config.logging.flush_interval_seconds < 1 ||
@@ -774,7 +833,7 @@ void LogRequest(const ServiceConfig& config,
         {"path", request.path},
         {"operation", operation},
         {"content_type", media_type},
-        {"request_format", IsBinaryImageMediaType(media_type)
+        {"request_format", IsBinaryPayloadMediaType(media_type)
             ? "binary" : "json"},
         {"status", response.status},
         {"request_bytes", request.body.size()},
@@ -891,6 +950,40 @@ json CallOcr(lw_ppocr_handle handle, const std::vector<uint8_t>& encoded,
     }
 }
 
+json CallPdfOcr(lw_ppocr_handle handle, const uint8_t* encoded,
+                size_t encoded_size, const lw_ppocr_pdf_options& options) {
+    char* output = nullptr;
+    uint64_t length = 0;
+    const lw_ppocr_status status = lw_ppocr_ocr_pdf_encoded(handle,
+        encoded, encoded_size, &options, &output, &length);
+    if (status != LW_PPOCR_STATUS_OK) {
+        const std::string error = LastError(handle);
+        if (status == LW_PPOCR_STATUS_LIMIT_EXCEEDED) {
+            throw HttpError(413, "pdf_limit_exceeded", error);
+        }
+        if (status == LW_PPOCR_STATUS_DOCUMENT_ERROR) {
+            if (error.find("PDFium") != std::string::npos ||
+                error.find("pdfium") != std::string::npos) {
+                throw HttpError(503, "pdfium_unavailable", error);
+            }
+            throw HttpError(400, "invalid_pdf", error);
+        }
+        if (status == LW_PPOCR_STATUS_INVALID_ARGUMENT ||
+            status == LW_PPOCR_STATUS_IMAGE_ERROR) {
+            throw std::invalid_argument(error);
+        }
+        throw std::runtime_error(error);
+    }
+    try {
+        json result = json::parse(output, output + length);
+        lw_ppocr_string_free(output);
+        return result;
+    } catch (...) {
+        lw_ppocr_string_free(output);
+        throw;
+    }
+}
+
 json CallRecognizeBatch(lw_ppocr_handle handle,
                         const std::vector<std::vector<uint8_t>>& images) {
     std::vector<const uint8_t*> pointers;
@@ -923,6 +1016,85 @@ json CallRecognizeBatch(lw_ppocr_handle handle,
     } catch (...) {
         lw_ppocr_string_free(output);
         throw;
+    }
+}
+
+void HandlePdfApi(const ServiceConfig& config, EnginePool& engines,
+                  const httplib::Request& request,
+                  httplib::Response& response) {
+    const auto start = Clock::now();
+    const std::string request_id = NewRequestId();
+    const std::string operation = "pdf_ocr";
+    response.set_header("X-Request-ID", request_id);
+    if (!Authorized(config, request, response, request_id)) {
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, "unauthorized");
+        return;
+    }
+    LogRequestStart(config, request, request_id, operation);
+    try {
+        if (!IsPdfMediaType(RequestMediaType(request))) {
+            throw std::invalid_argument(
+                "Content-Type must be application/pdf");
+        }
+        if (request.body.empty()) {
+            throw std::invalid_argument("PDF body is empty");
+        }
+        lw_ppocr_pdf_options options{};
+        lw_ppocr_pdf_options_init(&options);
+        options.dpi = QueryUint32(request, "dpi", config.pdf_dpi);
+        options.first_page = QueryUint32(request, "first_page",
+            options.first_page);
+        options.page_count = QueryUint32(request, "page_count",
+            options.page_count);
+        options.max_pages = static_cast<uint32_t>(config.max_pdf_pages);
+        options.max_page_pixels = config.max_pdf_page_pixels;
+        options.max_total_pixels = config.max_pdf_total_pixels;
+        if (request.has_param("mode")) {
+            std::string mode = request.get_param_value("mode");
+            std::transform(mode.begin(), mode.end(), mode.begin(),
+                [](unsigned char value) {
+                    return static_cast<char>(std::tolower(value));
+                });
+            if (mode == "auto") options.mode = LW_PPOCR_PDF_MODE_AUTO;
+            else if (mode == "text") options.mode = LW_PPOCR_PDF_MODE_TEXT;
+            else if (mode == "ocr") options.mode = LW_PPOCR_PDF_MODE_OCR;
+            else if (mode == "hybrid") options.mode = LW_PPOCR_PDF_MODE_HYBRID;
+            else throw std::invalid_argument(
+                "mode must be auto, text, ocr, or hybrid");
+        }
+
+        auto lease = AcquireEngine(config, engines);
+        json native = CallPdfOcr(lease.get(),
+            reinterpret_cast<const uint8_t*>(request.body.data()),
+            request.body.size(), options);
+        native["ok"] = true;
+        native["request_id"] = request_id;
+        native["backend"] = "opencv-dnn";
+        native["timing_ms"]["server_total"] =
+            Milliseconds(start, Clock::now());
+        const size_t count = native.value("pages", json::array()).size();
+        SetJson(response, native);
+        LogRequest(config, request, response, request_id, operation, start,
+            count, &native);
+    } catch (const HttpError& exception) {
+        SetJson(response, ErrorResponse(request_id, exception.code(),
+            exception.what()), exception.status());
+        if (exception.status() == 429 || exception.status() == 503) {
+            response.set_header("Retry-After", "1");
+        }
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, exception.code());
+    } catch (const std::invalid_argument& exception) {
+        SetJson(response, ErrorResponse(request_id, "invalid_request",
+            exception.what()), 400);
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, "invalid_request");
+    } catch (const std::exception& exception) {
+        SetJson(response, ErrorResponse(request_id, "internal_error",
+            exception.what()), 500);
+        LogRequest(config, request, response, request_id, operation, start,
+            0, nullptr, "internal_error");
     }
 }
 
@@ -969,6 +1141,10 @@ void PrintStartupInfo(const ServiceConfig& config) {
         << config.max_batch_total_pixels << '\n'
         << "  max_batch_decoded_bytes: "
         << config.max_batch_decoded_bytes << '\n'
+        << "  pdf_dpi: " << config.pdf_dpi << '\n'
+        << "  max_pdf_pages: " << config.max_pdf_pages << '\n'
+        << "  max_pdf_page_pixels: " << config.max_pdf_page_pixels << '\n'
+        << "  max_pdf_total_pixels: " << config.max_pdf_total_pixels << '\n'
         << "  api_key: " << (config.api_key.empty()
             ? "disabled / 未启用"
             : "configured / 已配置 (value hidden / 明文已隐藏)") << '\n'
@@ -997,6 +1173,7 @@ void PrintStartupInfo(const ServiceConfig& config) {
         << "  POST /api/recognize JSON: {\"image_base64\":\"...\"}\n"
         << "  POST /api/recognize binary: image/* or application/octet-stream\n"
         << "  POST /api/recognize batch: {\"images_base64\":[\"...\"]}\n"
+        << "  POST /api/pdf/ocr binary: application/pdf\n"
         << "  authentication: X-API-Key header when api_key is configured\n"
         << "============================================================\n"
         << std::flush;
@@ -1177,12 +1354,16 @@ int RunServer(const ServiceConfig& config,
                                     httplib::Response& response) {
         const std::string request_id = NewRequestId();
         response.set_header("X-Request-ID", request_id);
+        const bool pdfium_available = lw_ppocr_pdfium_is_available() != 0;
         SetJson(response, {
             {"ok", true}, {"status", "ready"},
             {"request_id", request_id},
             {"product", kProduct}, {"version", kVersion},
             {"backend", "opencv-dnn"}, {"backend_name", "OpenCV DNN CPU"},
             {"api_key_required", !config.api_key.empty()},
+            {"capabilities", {
+                {"pdf_ocr", { {"available", pdfium_available} }}
+            }},
             {"project_url", kProjectUrl}, {"author", kAuthor}
         });
     });
@@ -1194,6 +1375,10 @@ int RunServer(const ServiceConfig& config,
         const httplib::Request& request, httplib::Response& response) {
         HandleApi(config, engines, request, response, true);
     });
+    server.Post("/api/pdf/ocr", [&config, &engines](
+        const httplib::Request& request, httplib::Response& response) {
+        HandlePdfApi(config, engines, request, response);
+    });
     server.set_error_handler([&config](const httplib::Request& request,
                                 httplib::Response& response) {
         if (response.status == 413 && response.body.empty()) {
@@ -1203,7 +1388,8 @@ int RunServer(const ServiceConfig& config,
             SetJson(response, ErrorResponse(request_id, "payload_too_large",
                 "request exceeds max_request_bytes"), 413);
             const std::string operation = request.path == "/api/recognize"
-                ? "recognize" : "ocr";
+                ? "recognize" : (request.path == "/api/pdf/ocr"
+                    ? "pdf_ocr" : "ocr");
             LogRequest(config, request, response, request_id, operation, start,
                 0, nullptr, "payload_too_large");
             return httplib::Server::HandlerResponse::Handled;

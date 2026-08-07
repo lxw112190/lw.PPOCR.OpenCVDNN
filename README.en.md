@@ -18,7 +18,7 @@ The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the C
 - Recognition only: skips detection for pre-cropped text-line images. HTTP batches default to 32 images, may be configured up to 256, and are inferred in chunks of eight.
 - C API: accepts encoded JPEG/PNG/BMP image bytes and returns UTF-8 JSON.
 - C, C# P/Invoke, and Python ctypes examples.
-- HTTP endpoints support direct binary image uploads and compatible JSON/Base64 requests through `/api/ocr`, `/api/recognize`, and `/health`; the `result` field matches `lw.PPOCR.Inference`.
+- HTTP endpoints support direct binary image uploads, JSON/Base64 requests, and raw PDF uploads through `/api/ocr`, `/api/recognize`, `/api/pdf/ocr`, and `/health`; PDF pages select text-layer, OCR, or hybrid results.
 - Browser page with detected regions, confidence scores, and stage timings.
 - Optional API Key; runtime and request logging can be controlled independently.
 - Production safeguards: bounded HTTP/engine queues, `429` on a full engine wait queue, `503` on engine wait timeout, and cumulative decoded-memory limits for batches.

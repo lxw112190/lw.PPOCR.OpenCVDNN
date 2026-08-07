@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$PackageDir
+    [string]$PackageDir,
+    [string]$PdfiumDll = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +47,18 @@ function Find-VcRuntimeDirectory {
 $runtimeDirectory = Find-VcRuntimeDirectory
 Get-ChildItem -LiteralPath $runtimeDirectory -Filter "*.dll" -File |
     Copy-Item -Destination $package -Force
+
+if ($PdfiumDll) {
+    $pdfiumPath = (Resolve-Path -LiteralPath $PdfiumDll).Path
+    if ([IO.Path]::GetExtension($pdfiumPath).ToLowerInvariant() -ne ".dll") {
+        throw "PdfiumDll must point to a .dll file: $pdfiumPath"
+    }
+    Copy-Item -LiteralPath $pdfiumPath -Destination (Join-Path $package "pdfium.dll") -Force
+    Write-Output "Bundled PDFium from: $pdfiumPath"
+}
+elseif (-not (Test-Path -LiteralPath (Join-Path $package "pdfium.dll") -PathType Leaf)) {
+    Write-Warning "PDFium was not bundled. PDF OCR requires pdfium.dll beside the service or LW_PPOCR_PDFIUM_LIBRARY."
+}
 
 $required = @(
     "concrt140.dll",

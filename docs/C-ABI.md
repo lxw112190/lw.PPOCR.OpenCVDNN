@@ -31,6 +31,15 @@ baseline (`docs/exports-v1.txt` in a release package).
   with a null pointer or an already-null handle is safe.
 - Calls on one engine handle are internally serialized. Use separate handles
   for parallel inference when the available memory has been measured.
+- `lw_ppocr_ocr_pdf_encoded` accepts PDF bytes and returns a page-level JSON
+  document. `lw_ppocr_pdf_options_init` supplies safe defaults. `mode` selects
+  text-layer extraction, raster OCR, hybrid processing, or automatic per-page
+  selection. PDF text boxes are mapped to rendered page pixel coordinates.
+  A PDFium shared library is loaded at runtime; set
+  `LW_PPOCR_PDFIUM_LIBRARY` to an explicit path when it is not discoverable.
+  `lw_ppocr_pdfium_is_available` can be used by hosts to probe that optional
+  capability before submitting a PDF request. PDF input bytes are borrowed
+  only for the duration of the call and must remain valid until it returns.
 
 - API v1 有效期间，不得删除或重命名已有导出函数，也不得修改调用约定、参数、
   返回值、内存所有权和错误语义。

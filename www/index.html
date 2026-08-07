@@ -43,8 +43,19 @@
     .dialog-head strong { font-size: 18px; }
     .sponsor { display: block; width: auto; max-width: 100%; max-height: 72vh; margin: auto; border-radius: 12px; background: white; }
     .original-link { display: block; margin-top: 12px; text-align: center; }
+    .section-head { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+    .pdf-form { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(110px, .55fr)); gap: 12px; margin-top: 15px; }
+    .pdf-page { margin-top: 16px; padding: 14px; border: 1px solid #293854; border-radius: 10px; background: #0a1221; }
+    .pdf-page-head { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+    .pdf-badge { display: inline-block; padding: 3px 8px; border: 1px solid #42628e; border-radius: 999px; color: #abd3ff; font-size: 12px; }
+    .pdf-page .table-wrap { margin-top: 8px; }
+    .pdf-viewer { display: grid; gap: 16px; margin-top: 16px; }
+    .pdf-sheet { position: relative; width: fit-content; max-width: 100%; margin: auto; overflow: hidden; border: 1px solid #334a6e; border-radius: 10px; background: white; box-shadow: 0 12px 30px #02081788; }
+    .pdf-sheet canvas { display: block; max-width: 100%; height: auto; }
+    .pdf-sheet .pdf-overlay { position: absolute; inset: 0; pointer-events: none; }
+    .pdf-sheet-label { margin: 0 0 6px; color: #91a2c2; font-size: 12px; text-align: center; }
     @media (max-width: 760px) {
-      .form, .api-row { grid-template-columns: 1fr; }
+      .form, .api-row, .pdf-form { grid-template-columns: 1fr; }
       .timings { grid-template-columns: repeat(3, 1fr); }
       .footer { align-items: stretch; flex-direction: column; }
       .sponsor-button { width: 100%; }
@@ -88,6 +99,35 @@
   </section>
   <section class="card"><strong>JSON 响应</strong><pre id="json">尚未请求</pre></section>
 
+  <section class="card">
+    <div class="section-head"><strong>PDF OCR 测试</strong><span class="hint">自动优先读取 PDF 文字层；无文字层或图像页再使用 OCR。</span></div>
+    <div class="pdf-form">
+      <label class="field">PDF 文件
+        <input id="pdf-file" type="file" accept=".pdf,application/pdf">
+      </label>
+      <label class="field">处理模式
+        <select id="pdf-mode"><option value="auto">自动</option><option value="text">仅文字层</option><option value="ocr">仅 OCR</option><option value="hybrid">文字层 + OCR</option></select>
+      </label>
+      <label class="field">DPI
+        <input id="pdf-dpi" type="number" min="36" max="600" step="1" value="200">
+      </label>
+      <label class="field">起始页（0 起）
+        <input id="pdf-first-page" type="number" min="0" step="1" value="0">
+      </label>
+      <label class="field">处理页数（0=全部）
+        <input id="pdf-page-count" type="number" min="0" step="1" value="0">
+      </label>
+    </div>
+    <div class="api-row">
+      <div class="field"><span>请求参数</span><span id="pdf-meta" class="hint">请选择 PDF 文件。页码从 0 开始，受服务端 PDF 页数和像素限制约束。</span></div>
+      <div class="field"><span>操作</span><button id="pdf-run" disabled>开始 PDF 识别</button></div>
+    </div>
+    <div id="pdf-status" class="status">尚未请求 PDF</div>
+    <div id="pdf-viewer" class="pdf-viewer" aria-live="polite"></div>
+    <div id="pdf-pages"></div>
+    <pre id="pdf-json">尚未请求</pre>
+  </section>
+
   <section class="card footer">
     <div>
       <strong>联系与支持</strong>
@@ -108,6 +148,20 @@
 </main>
 
 <script>
+  if (typeof Uint8Array.prototype.toHex !== 'function') {
+    Object.defineProperty(Uint8Array.prototype, 'toHex', {
+      configurable: true,
+      value() {
+        const alphabet = '0123456789abcdef'; let result = '';
+        for (const value of this) result += alphabet[value >> 4] + alphabet[value & 15];
+        return result;
+      }
+    });
+  }
+</script>
+<script type="module">
+  import * as pdfjsLib from './pdfjs/pdf.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = './pdfjs/pdf.worker.min.js';
   const file = document.querySelector('#file');
   const mode = document.querySelector('#mode');
   const run = document.querySelector('#run');
@@ -118,6 +172,17 @@
   const rows = document.querySelector('#rows');
   const output = document.querySelector('#json');
   const timings = document.querySelector('#timings');
+  const pdfFile = document.querySelector('#pdf-file');
+  const pdfMode = document.querySelector('#pdf-mode');
+  const pdfDpi = document.querySelector('#pdf-dpi');
+  const pdfFirstPage = document.querySelector('#pdf-first-page');
+  const pdfPageCount = document.querySelector('#pdf-page-count');
+  const pdfRun = document.querySelector('#pdf-run');
+  const pdfStatus = document.querySelector('#pdf-status');
+  const pdfMeta = document.querySelector('#pdf-meta');
+  const pdfPages = document.querySelector('#pdf-pages');
+  const pdfOutput = document.querySelector('#pdf-json');
+  const pdfViewer = document.querySelector('#pdf-viewer');
   const sponsorDialog = document.querySelector('#sponsor-dialog');
   document.querySelector('#sponsor-open').addEventListener('click', () => sponsorDialog.showModal());
   document.querySelector('#sponsor-close').addEventListener('click', () => sponsorDialog.close());
@@ -132,6 +197,7 @@
   let previewUrl = '';
   let lastRegions = [];
   let apiKeyRequired = false;
+  let selectedPdf = null;
 
   fetch('/health').then(r => r.json()).then(data => {
     apiKeyRequired = Boolean(data.api_key_required);
@@ -177,6 +243,111 @@
     sourceImage.src = previewUrl; run.disabled = false;
     status.textContent = `已选择 ${selected.name}；将通过二进制接口上传`;
     timings.replaceChildren(); rows.replaceChildren();
+  });
+
+  pdfFile.addEventListener('change', () => {
+    selectedPdf = pdfFile.files[0] || null;
+    pdfRun.disabled = !selectedPdf;
+    pdfPages.replaceChildren(); pdfViewer.replaceChildren(); pdfOutput.textContent = '尚未请求';
+    if (!selectedPdf) {
+      pdfStatus.textContent = '尚未选择 PDF';
+      pdfMeta.textContent = '请选择 PDF 文件。页码从 0 开始，受服务端 PDF 页数和像素限制约束。';
+      return;
+    }
+    pdfStatus.textContent = `已选择 ${selectedPdf.name}`;
+    pdfMeta.textContent = `${selectedPdf.type || 'application/pdf'} · ${(selectedPdf.size / 1024 / 1024).toFixed(2)} MiB · 模式 ${pdfMode.value} · DPI ${pdfDpi.value}`;
+  });
+
+  [pdfMode, pdfDpi, pdfFirstPage, pdfPageCount].forEach(control => control.addEventListener('change', () => {
+    if (!selectedPdf) return;
+    pdfMeta.textContent = `${selectedPdf.type || 'application/pdf'} · ${(selectedPdf.size / 1024 / 1024).toFixed(2)} MiB · 模式 ${pdfMode.value} · DPI ${pdfDpi.value}`;
+  }));
+
+  function renderPdfPage(page) {
+    const container = document.createElement('section'); container.className = 'pdf-page';
+    const head = document.createElement('div'); head.className = 'pdf-page-head';
+    const title = document.createElement('strong');
+    title.textContent = `第 ${Number(page.page_index ?? 0) + 1} 页 · ${page.result?.length || 0} 项`;
+    const detail = document.createElement('span'); detail.className = 'hint';
+    detail.textContent = `${page.image?.width || 0} × ${page.image?.height || 0} · 文字层 ${page.text_layer_usable ? '可用' : '不可用'} · ${Number(page.timing_ms?.text_extract || 0).toFixed(2)} ms`;
+    const badge = document.createElement('span'); badge.className = 'pdf-badge'; badge.textContent = page.method || 'unknown';
+    head.append(title, detail, badge); container.appendChild(head);
+    const wrap = document.createElement('div'); wrap.className = 'table-wrap';
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>#</th><th>文本</th><th>来源</th><th>置信度</th><th>坐标</th></tr></thead>';
+    const body = document.createElement('tbody');
+    const items = Array.isArray(page.result) ? page.result : [];
+    items.forEach((item, index) => {
+      const tr = document.createElement('tr');
+      const box = readBox(item);
+      const points = box ? box.map(([x, y]) => `(${x.toFixed(0)}, ${y.toFixed(0)})`).join(' ') : '—';
+      addCell(tr, index + 1); addCell(tr, item.text || ''); addCell(tr, item.source || 'pdf_text');
+      addCell(tr, item.score == null ? '—' : Number(item.score).toFixed(4)); addCell(tr, points); body.appendChild(tr);
+    });
+    if (!items.length) { const tr = document.createElement('tr'); addCell(tr, '—'); addCell(tr, '未提取到文本'); body.appendChild(tr); }
+    table.appendChild(body); wrap.appendChild(table); container.appendChild(wrap); return container;
+  }
+
+  async function renderPdfViewer(file, pageInfos) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const pdfDocument = await pdfjsLib.getDocument({data: bytes}).promise;
+    for (const pageInfo of pageInfos) {
+      const pageNumber = Number(pageInfo.page_index || 0) + 1;
+      const page = await pdfDocument.getPage(pageNumber);
+      const baseViewport = page.getViewport({scale: 1});
+      const scale = Math.min(1.45, 1000 / Math.max(1, baseViewport.width));
+      const viewport = page.getViewport({scale});
+      const label = document.createElement('p'); label.className = 'pdf-sheet-label';
+      label.textContent = `第 ${pageNumber} 页 · ${pageInfo.method || 'unknown'} · ${pageInfo.text_layer_usable ? '文字层可用' : '文字层不可用'}`;
+      const sheet = document.createElement('div'); sheet.className = 'pdf-sheet';
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+      const overlay = document.createElement('canvas'); overlay.className = 'pdf-overlay';
+      overlay.width = canvas.width; overlay.height = canvas.height;
+      sheet.append(canvas, overlay); pdfViewer.append(label, sheet);
+      await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+      const overlayContext = overlay.getContext('2d');
+      const sx = viewport.width / Math.max(1, Number(pageInfo.image?.width || viewport.width));
+      const sy = viewport.height / Math.max(1, Number(pageInfo.image?.height || viewport.height));
+      overlayContext.lineWidth = Math.max(2, viewport.width / 500);
+      overlayContext.font = `${Math.max(12, Math.round(viewport.width / 75))}px "Microsoft YaHei UI", sans-serif`;
+      (Array.isArray(pageInfo.result) ? pageInfo.result : []).forEach((item, index) => {
+        const sourcePoints = readBox(item); if (!sourcePoints) return;
+        const points = sourcePoints.map(([x, y]) => [x * sx, y * sy]);
+        overlayContext.beginPath(); overlayContext.moveTo(...points[0]);
+        points.slice(1).forEach(point => overlayContext.lineTo(...point)); overlayContext.closePath();
+        overlayContext.strokeStyle = item.source === 'pdf_text' ? '#18b889' : item.source === 'hybrid' ? '#398cff' : '#ff8b2e';
+        overlayContext.stroke();
+        const text = `${index + 1} ${item.text || ''}`.slice(0, 48);
+        const x = Math.max(0, points[0][0]); const y = Math.max(18, points[0][1]);
+        overlayContext.fillStyle = '#061d18dd'; overlayContext.fillRect(x, y - 18, overlayContext.measureText(text).width + 8, 20);
+        overlayContext.fillStyle = '#ffffff'; overlayContext.fillText(text, x + 4, y - 4);
+      });
+    }
+  }
+
+  pdfRun.addEventListener('click', async () => {
+    pdfRun.disabled = true; pdfPages.replaceChildren(); pdfViewer.replaceChildren(); pdfOutput.textContent = '请求中…'; pdfStatus.textContent = '正在读取 PDF…';
+    try {
+      if (!selectedPdf) throw new Error('请先选择 PDF 文件');
+      const dpi = Math.floor(Math.max(36, Math.min(600, Number(pdfDpi.value) || 200)));
+      const firstPage = Math.floor(Math.max(0, Number(pdfFirstPage.value) || 0));
+      const pageCount = Math.floor(Math.max(0, Number(pdfPageCount.value) || 0));
+      const query = new URLSearchParams({mode: pdfMode.value, dpi: String(dpi), first_page: String(firstPage), page_count: String(pageCount)});
+      const headers = {'Content-Type': 'application/pdf'};
+      const key = document.querySelector('#key').value; if (apiKeyRequired && !key) throw new Error('服务已启用 API Key，请先填写');
+      if (key) headers['X-API-Key'] = key;
+      const response = await fetch(`/api/pdf/ocr?${query}`, {method: 'POST', headers, body: selectedPdf});
+      const data = await response.json(); pdfOutput.textContent = JSON.stringify(data, null, 2);
+      if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      const pages = Array.isArray(data.pages) ? data.pages : [];
+      pages.forEach(page => pdfPages.appendChild(renderPdfPage(page)));
+      await renderPdfViewer(selectedPdf, pages);
+      const documentInfo = data.document || {};
+      pdfStatus.textContent = `PDF 识别完成：${documentInfo.processed_pages || pages.length}/${documentInfo.page_count || pages.length} 页，request_id=${data.request_id || '—'}`;
+    } catch (error) {
+      pdfStatus.textContent = `PDF 识别失败：${error.message || error}`;
+    } finally { pdfRun.disabled = !selectedPdf; }
   });
 
   function addCell(tr, value) { const td = document.createElement('td'); td.textContent = value; tr.appendChild(td); }

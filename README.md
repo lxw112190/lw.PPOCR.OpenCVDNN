@@ -16,7 +16,7 @@
 - 仅识别：客户已裁剪文字区域时跳过检测；HTTP 默认每批最多 32 张，配置上限为 256 张，并按 8 张分块推理。
 - 稳定 C API：输入 JPEG/PNG/BMP 等编码图片字节，输出 UTF-8 JSON。
 - C、C# P/Invoke 和 Python ctypes 调用示例。
-- HTTP API：支持图片二进制直传和兼容的 JSON/Base64 请求，提供 `/api/ocr`、`/api/recognize`、`/health`；`result` 字段与 `lw.PPOCR.Inference` 保持一致。
+- HTTP API：支持图片二进制直传、JSON/Base64 请求和原始 PDF 上传，提供 `/api/ocr`、`/api/recognize`、`/api/pdf/ocr`、`/health`；PDF 接口按页面处理文字层、OCR 或混合结果。
 - 浏览器体验页：显示识别文本、置信度、阶段耗时，并在原图绘制文字区域。
 - 可选 API Key；运行日志和请求日志可分别开关。
 - 生产保护：HTTP 与引擎等待队列有界，队列满返回 `429`，等待引擎超时返回 `503`；批量请求受累计像素和解码内存限制。

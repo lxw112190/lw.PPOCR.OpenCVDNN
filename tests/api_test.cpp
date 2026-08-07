@@ -8,13 +8,18 @@ static_assert(std::is_standard_layout<lw_ppocr_version>::value,
     "lw_ppocr_version must remain a C ABI structure");
 static_assert(std::is_standard_layout<lw_ppocr_config>::value,
     "lw_ppocr_config must remain a C ABI structure");
+static_assert(std::is_standard_layout<lw_ppocr_pdf_options>::value,
+    "lw_ppocr_pdf_options must remain a C ABI structure");
 static_assert(offsetof(lw_ppocr_version, struct_size) == 0, "ABI changed");
 static_assert(offsetof(lw_ppocr_version, api_version) == 4, "ABI changed");
 static_assert(offsetof(lw_ppocr_config, struct_size) == 0, "ABI changed");
 static_assert(offsetof(lw_ppocr_config, api_version) == 4, "ABI changed");
+static_assert(offsetof(lw_ppocr_pdf_options, struct_size) == 0,
+    "PDF ABI changed");
 static_assert(offsetof(lw_ppocr_config, model_manifest_utf8) == 8, "ABI changed");
 
 #if INTPTR_MAX == INT64_MAX
+static_assert(sizeof(lw_ppocr_pdf_options) == 64, "64-bit PDF ABI changed");
 static_assert(sizeof(lw_ppocr_version) == 40, "64-bit ABI changed");
 static_assert(offsetof(lw_ppocr_version, product_name_utf8) == 24,
     "64-bit ABI changed");
@@ -47,6 +52,15 @@ static_assert(std::is_same<decltype(&lw_ppocr_create), create_signature>::value,
     "lw_ppocr_create signature changed");
 static_assert(std::is_same<decltype(&lw_ppocr_ocr_encoded), ocr_signature>::value,
     "lw_ppocr_ocr_encoded signature changed");
+using pdf_ocr_signature = lw_ppocr_status(LW_PPOCR_CALL*)(
+    lw_ppocr_handle, const uint8_t*, uint64_t,
+    const lw_ppocr_pdf_options*, char**, uint64_t*);
+static_assert(std::is_same<decltype(&lw_ppocr_ocr_pdf_encoded),
+    pdf_ocr_signature>::value, "lw_ppocr_ocr_pdf_encoded signature changed");
+using pdfium_available_signature = int(LW_PPOCR_CALL*)(void);
+static_assert(std::is_same<decltype(&lw_ppocr_pdfium_is_available),
+    pdfium_available_signature>::value,
+    "lw_ppocr_pdfium_is_available signature changed");
 
 int main() {
     if (LW_PPOCR_API_VERSION != 1u ||
@@ -82,6 +96,15 @@ int main() {
         version.patch != LW_PPOCR_VERSION_PATCH ||
         std::strcmp(version.version_utf8, LW_PPOCR_VERSION_STRING) != 0) {
         return 5;
+    }
+    lw_ppocr_pdf_options pdf{};
+    lw_ppocr_pdf_options_init(&pdf);
+    if (pdf.struct_size != sizeof(pdf) ||
+        pdf.api_version != LW_PPOCR_API_VERSION ||
+        pdf.mode != LW_PPOCR_PDF_MODE_AUTO || pdf.dpi != 200 ||
+        pdf.max_pages != 10 || pdf.max_page_pixels != 25000000 ||
+        pdf.max_total_pixels != 100000000) {
+        return 6;
     }
     return 0;
 }

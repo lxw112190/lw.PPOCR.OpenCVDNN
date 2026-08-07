@@ -32,6 +32,10 @@
     "max_batch_images": {"type": "integer", "minimum": 1, "maximum": 256},
     "max_batch_total_pixels": {"type": "integer", "minimum": 1, "maximum": 1000000000},
     "max_batch_decoded_bytes": {"type": "integer", "minimum": 1, "maximum": 4294967296},
+    "pdf_dpi": {"type": "integer", "minimum": 36, "maximum": 600},
+    "max_pdf_pages": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "max_pdf_page_pixels": {"type": "integer", "minimum": 1, "maximum": 200000000},
+    "max_pdf_total_pixels": {"type": "integer", "minimum": 1, "maximum": 1000000000},
     "logging": {"$ref": "#/$defs/logging"}
   },
   "$defs": {

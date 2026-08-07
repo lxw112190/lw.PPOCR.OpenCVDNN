@@ -14,8 +14,11 @@ If `api_key` is configured, add `X-API-Key: <secret>` to every OCR request.
 
 ## `GET /health`
 
-Returns service readiness, product version, backend, and whether an API Key is
-required. It does not load or process an image.
+Returns service readiness, product version, backend, whether an API Key is
+required, and optional capabilities. `capabilities.pdf_ocr.available` reports
+whether the runtime PDFium library can be loaded. The OCR service remains ready
+when PDFium is absent; only `/api/pdf/ocr` is unavailable. It does not load or
+process an image.
 
 ## `POST /api/ocr`
 
@@ -98,16 +101,36 @@ source order. `max_batch_images`, `max_batch_total_pixels`, and
 `max_batch_decoded_bytes` limit count, cumulative pixels, and cumulative
 decoded memory respectively.
 
+## `POST /api/pdf/ocr`
+
+Accepts a raw `application/pdf` body and returns page-level OCR results. The
+adapter first inspects the PDF text layer. Pages with a usable visible text
+layer use `method: "pdf_text"` without raster OCR; image-heavy pages use
+`method: "hybrid"` and merge text-layer items with OCR items; pages without a
+usable text layer use `method: "ocr"`. This endpoint does not apply any
+document-specific field parsing.
+
+```bash
+curl 'http://127.0.0.1:8787/api/pdf/ocr?mode=auto&dpi=200' \
+  -H "Content-Type: application/pdf" \
+  --data-binary @document.pdf
+```
+
+`mode` is `auto` (default), `text`, `ocr`, or `hybrid`; `first_page` is
+zero-based and `page_count=0` means all pages within `max_pdf_pages`. Text-layer
+items expose four-point coordinates in rendered page pixels and carry
+`source: "pdf_text"`; OCR items carry `source: "ocr"`.
+
 ## Status codes
 
 | Status | Meaning |
 | --- | --- |
 | `200` | Request completed successfully |
-| `400` | Invalid JSON, Base64, image, or parameter |
+| `400` | Invalid JSON, Base64, image, PDF, or parameter |
 | `401` | Missing or invalid API Key |
-| `413` | Request body, batch count, cumulative pixels, or decoded bytes exceeds a configured limit |
+| `413` | Request body, batch count, PDF page/pixel limit, cumulative pixels, or decoded bytes exceeds a configured limit |
 | `429` | The OCR engine wait queue is full |
-| `503` | Waiting for an OCR engine timed out or the service is stopping |
+| `503` | PDFium is unavailable, waiting for an OCR engine timed out, or the service is stopping |
 | `500` | Model inference or unexpected server error |
 
 Every application-level error is JSON and includes a stable `error_code`:
@@ -117,7 +140,8 @@ Every application-level error is JSON and includes a stable `error_code`:
 ```
 
 API v1 defines these error codes: `unauthorized`, `invalid_json`,
-`invalid_request`, `payload_too_large`, `batch_limit_exceeded`, `queue_full`,
+`invalid_request`, `invalid_pdf`, `pdfium_unavailable`, `pdf_limit_exceeded`,
+`payload_too_large`, `batch_limit_exceeded`, `queue_full`,
 `engine_wait_timeout`, `service_stopping`, `service_unavailable`, and
 `internal_error`. `429` and `503` responses include `Retry-After: 1`. Clients should use
 `error_code`, not the human-readable `error` text, for control flow.

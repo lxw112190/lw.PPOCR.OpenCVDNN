@@ -2,8 +2,8 @@
   "lock_version": 1,
   "policy": "Frozen v1 baseline published with v1.0.0. Breaking changes require a versioned v2 contract.",
   "files": {
-    "access-log-v1.schema.json": "ded2b983df0266ede4e35b2bbae5992b6172025a67b52e81e3655ef1c5b31faf",
-    "http-api-v1.openapi.json": "9b7ef23b87b0985849e79147df06e218c08628f849336980b06de66ae3566b0f",
-    "http-service-config-v1.schema.json": "2184faabe77c5ff913d52c2c7619844c0e7b9104dcbeecae36dcb3c7ccd1b875"
+      "access-log-v1.schema.json": "cdac5610365214e86f5251ad853bb19432395c5dd8c406ff452fae1c6d421efe",
+      "http-api-v1.openapi.json": "d919b1d62b83bca8296318323321b1386fdbdf60c7d02a85d9c5b2ac95c57b42",
+      "http-service-config-v1.schema.json": "528f3ea98f3606b7719a335c3f760619c2f1bb4b80c4a0dcd9d56ff8c753b362"
   }
 }

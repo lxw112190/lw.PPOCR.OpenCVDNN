@@ -25,6 +25,10 @@
   "max_batch_images": 32,
   "max_batch_total_pixels": 40000000,
   "max_batch_decoded_bytes": 120000000,
+  "pdf_dpi": 200,
+  "max_pdf_pages": 10,
+  "max_pdf_page_pixels": 25000000,
+  "max_pdf_total_pixels": 100000000,
   "logging": {
     "enabled": true,
     "level": "info",

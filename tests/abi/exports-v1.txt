@@ -3,6 +3,9 @@ lw_ppocr_config_init
 lw_ppocr_get_version
 lw_ppocr_create
 lw_ppocr_ocr_encoded
+lw_ppocr_pdfium_is_available
+lw_ppocr_pdf_options_init
+lw_ppocr_ocr_pdf_encoded
 lw_ppocr_recognize_encoded
 lw_ppocr_recognize_batch_encoded
 lw_ppocr_string_free

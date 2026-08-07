@@ -176,6 +176,58 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/pdfjs-dist@5.6.205",
+      "name": "pdfjs-dist",
+      "version": "5.6.205",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/pdfjs-dist@5.6.205",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/mozilla/pdf.js"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fc6d3fea45545fa44aa23f398cb05117d9eb3ef0ecee34bf049db066e60c1011"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:generic/pdfium@152.0.7947.0",
+      "name": "PDFium",
+      "version": "152.0.7947.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:generic/pdfium@152.0.7947.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://pdfium.googlesource.com/pdfium/"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "286fca2ef87127b72e10603b9f20eec4da419643cc8ac724fd2cedd86698f3fa"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:generic/opencv@5.0.0",
       "name": "OpenCV",
       "version": "5.0.0",
@@ -225,6 +277,8 @@
         "pkg:github/fmtlib/fmt@12.1.0",
         "pkg:generic/clipper@6.4.2",
         "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+        "pkg:npm/pdfjs-dist@5.6.205",
+        "pkg:generic/pdfium@152.0.7947.0",
         "pkg:generic/opencv@5.0.0"
       ]
     },
@@ -252,6 +306,14 @@
     },
     {
       "ref": "pkg:generic/paddleocr-pp-ocrv6-tiny-chinese@6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/pdfjs-dist@5.6.205",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:generic/pdfium@152.0.7947.0",
       "dependsOn": []
     },
     {

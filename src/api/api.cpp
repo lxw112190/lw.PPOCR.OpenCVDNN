@@ -1,13 +1,16 @@
 #include <lw/ppocr.h>
 
 #include "../engine/ocr_engine.hpp"
+#include "../pdf/pdfium_adapter.hpp"
 
 #include <json.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
@@ -20,6 +23,7 @@
 
 using json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
+using PdfMode = lw::ppocr::pdf::Mode;
 
 struct lw_ppocr_engine {
     std::unique_ptr<lw::ppocr::opencv_dnn::OcrEngine> engine;
@@ -39,6 +43,11 @@ constexpr uint64_t kDefaultMaxBatchDecodedBytes = 120000000;
 constexpr size_t kBatchChunkSize = 8;
 
 class LimitExceeded final : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class DocumentError final : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
@@ -172,6 +181,161 @@ json RecognitionJson(
     };
 }
 
+PdfMode PdfModeFrom(uint32_t value) {
+    switch (value) {
+    case LW_PPOCR_PDF_MODE_TEXT: return PdfMode::Text;
+    case LW_PPOCR_PDF_MODE_OCR: return PdfMode::Ocr;
+    case LW_PPOCR_PDF_MODE_HYBRID: return PdfMode::Hybrid;
+    case LW_PPOCR_PDF_MODE_AUTO: return PdfMode::Auto;
+    default: throw std::invalid_argument("unsupported PDF processing mode");
+    }
+}
+
+lw::ppocr::pdf::Options PdfOptionsFrom(const lw_ppocr_pdf_options& value) {
+    if (value.struct_size < sizeof(value) ||
+        value.api_version != LW_PPOCR_API_VERSION) {
+        throw std::invalid_argument("PDF options structure is invalid");
+    }
+    lw::ppocr::pdf::Options options;
+    options.dpi = value.dpi;
+    options.first_page = value.first_page;
+    options.page_count = value.page_count;
+    options.max_pages = value.max_pages;
+    options.max_page_pixels = value.max_page_pixels;
+    options.max_total_pixels = value.max_total_pixels;
+    options.mode = PdfModeFrom(value.mode);
+    if (options.dpi == 0) options.dpi = 200;
+    if (options.max_pages == 0) options.max_pages = 10;
+    if (options.max_page_pixels == 0) options.max_page_pixels = 25000000;
+    if (options.max_total_pixels == 0) options.max_total_pixels = 100000000;
+    return options;
+}
+
+json PdfTextItemJson(const lw::ppocr::pdf::TextItem& item) {
+    json value = {
+        {"text", item.text},
+        {"source", "pdf_text"},
+        {"score", nullptr}
+    };
+    for (size_t index = 0; index < item.box.size() && index < 4; ++index) {
+        value["x" + std::to_string(index + 1)] = item.box[index].x;
+        value["y" + std::to_string(index + 1)] = item.box[index].y;
+    }
+    return value;
+}
+
+double BoxIoU(const json& left, const lw::ppocr::pdf::TextItem& right) {
+    if (!left.contains("x1") || !left.contains("y1") ||
+        right.box.size() < 4) return 0.0;
+    double left_x = left.at("x1").get<double>();
+    double top_y = left.at("y1").get<double>();
+    double right_x = left_x;
+    double bottom_y = top_y;
+    for (int index = 2; index <= 4; ++index) {
+        right_x = std::max(right_x, left.at(
+            "x" + std::to_string(index)).get<double>());
+        bottom_y = std::max(bottom_y, left.at(
+            "y" + std::to_string(index)).get<double>());
+        left_x = std::min(left_x, left.at(
+            "x" + std::to_string(index)).get<double>());
+        top_y = std::min(top_y, left.at(
+            "y" + std::to_string(index)).get<double>());
+    }
+    float pdf_left = right.box[0].x;
+    float pdf_top = right.box[0].y;
+    float pdf_right = pdf_left;
+    float pdf_bottom = pdf_top;
+    for (const auto& point : right.box) {
+        pdf_left = std::min(pdf_left, point.x);
+        pdf_top = std::min(pdf_top, point.y);
+        pdf_right = std::max(pdf_right, point.x);
+        pdf_bottom = std::max(pdf_bottom, point.y);
+    }
+    const double intersection_left = std::max(left_x, static_cast<double>(pdf_left));
+    const double intersection_top = std::max(top_y, static_cast<double>(pdf_top));
+    const double intersection_right = std::min(right_x, static_cast<double>(pdf_right));
+    const double intersection_bottom = std::min(bottom_y, static_cast<double>(pdf_bottom));
+    if (intersection_right <= intersection_left ||
+        intersection_bottom <= intersection_top) return 0.0;
+    const double intersection = (intersection_right - intersection_left) *
+        (intersection_bottom - intersection_top);
+    const double union_area = (right_x - left_x) * (bottom_y - top_y) +
+        (pdf_right - pdf_left) * (pdf_bottom - pdf_top) - intersection;
+    return union_area <= 0.0 ? 0.0 : intersection / union_area;
+}
+
+std::string CompactText(std::string value) {
+    value.erase(std::remove_if(value.begin(), value.end(),
+        [](unsigned char character) { return std::isspace(character) != 0; }),
+        value.end());
+    return value;
+}
+
+json PdfPageJson(const lw::ppocr::pdf::Page& page,
+                 const json& ocr,
+                 const std::string& method) {
+    json items = json::array();
+    if (method == "pdf_text") {
+        for (const auto& item : page.text) {
+            if (item.visible) items.push_back(PdfTextItemJson(item));
+        }
+    } else {
+        if (ocr.contains("result") && ocr.at("result").is_array()) {
+            for (const auto& original : ocr.at("result")) {
+                json item = original;
+                item["source"] = "ocr";
+                items.push_back(std::move(item));
+            }
+        }
+        if (method == "hybrid") {
+            constexpr double kHybridDuplicateIoU = 0.45;
+            // Match each PDF text item to at most one OCR result.  A greedy
+            // first-match can reuse a single OCR box for repeated text and
+            // make the result count depend on PDF object order, so choose
+            // the highest-overlap candidate deterministically instead.
+            std::vector<bool> ocr_matched(items.size(), false);
+            for (const auto& text : page.text) {
+                if (!text.visible || text.text.empty()) continue;
+                const std::string right = CompactText(text.text);
+                std::size_t best_index = items.size();
+                double best_iou = kHybridDuplicateIoU;
+                for (std::size_t index = 0; index < items.size(); ++index) {
+                    if (index >= ocr_matched.size() || ocr_matched[index]) {
+                        continue;
+                    }
+                    auto& item = items[index];
+                    const std::string left = CompactText(
+                        item.value("text", std::string{}));
+                    const double iou = BoxIoU(item, text);
+                    if (!left.empty() && left == right && iou >= best_iou) {
+                        best_iou = iou;
+                        best_index = index;
+                    }
+                }
+                if (best_index < items.size()) {
+                    items[best_index]["source"] = "hybrid";
+                    ocr_matched[best_index] = true;
+                } else {
+                    items.push_back(PdfTextItemJson(text));
+                }
+            }
+        }
+    }
+    json result = {
+        {"page_index", page.page_index},
+        {"image", {{"width", page.width}, {"height", page.height}}},
+        {"method", method},
+        {"text_layer_usable", page.text_layer_usable},
+        {"result", std::move(items)},
+        {"timing_ms", {
+            {"text_extract", page.text_extract_ms},
+            {"render", page.render_ms}
+        }}
+    };
+    if (ocr.contains("timing")) result["ocr_timing"] = ocr.at("timing");
+    return result;
+}
+
 void AccumulateTiming(
     lw::ppocr::core::StageTiming& destination,
     const lw::ppocr::core::StageTiming& source) {
@@ -213,6 +377,9 @@ lw_ppocr_status Guard(Function&& function, lw_ppocr_status default_status) {
     } catch (const LimitExceeded& exception) {
         g_last_error = exception.what();
         return LW_PPOCR_STATUS_LIMIT_EXCEEDED;
+    } catch (const DocumentError& exception) {
+        g_last_error = exception.what();
+        return LW_PPOCR_STATUS_DOCUMENT_ERROR;
     } catch (const std::exception& exception) {
         g_last_error = exception.what();
         return default_status;
@@ -331,6 +498,127 @@ lw_ppocr_status LW_PPOCR_CALL lw_ppocr_ocr_encoded(
         AllocateJson(OcrJson(handle->engine->Run(image), image, decode_ms),
             result_json_utf8, result_json_length);
     }, LW_PPOCR_STATUS_INFERENCE_ERROR);
+}
+
+void LW_PPOCR_CALL lw_ppocr_pdf_options_init(lw_ppocr_pdf_options* options) {
+    if (options == nullptr) return;
+    std::memset(options, 0, sizeof(*options));
+    options->struct_size = sizeof(*options);
+    options->api_version = LW_PPOCR_API_VERSION;
+    options->mode = LW_PPOCR_PDF_MODE_AUTO;
+    options->dpi = 200;
+    options->max_pages = 10;
+    options->max_page_pixels = 25000000;
+    options->max_total_pixels = 100000000;
+}
+
+int LW_PPOCR_CALL lw_ppocr_pdfium_is_available(void) {
+    return lw::ppocr::pdf::IsAvailable() ? 1 : 0;
+}
+
+lw_ppocr_status LW_PPOCR_CALL lw_ppocr_ocr_pdf_encoded(
+    lw_ppocr_handle handle,
+    const uint8_t* pdf_data,
+    uint64_t pdf_size,
+    const lw_ppocr_pdf_options* options,
+    char** result_json_utf8,
+    uint64_t* result_json_length) {
+    if (handle == nullptr || pdf_data == nullptr || pdf_size == 0 ||
+        !ValidOutput(result_json_utf8, result_json_length)) {
+        g_last_error = "PDF OCR arguments are invalid";
+        return LW_PPOCR_STATUS_INVALID_ARGUMENT;
+    }
+    return Guard([&]() {
+        try {
+            lw_ppocr_pdf_options defaults{};
+            lw_ppocr_pdf_options_init(&defaults);
+            const lw_ppocr_pdf_options& value = options == nullptr
+                ? defaults : *options;
+            const auto pdf_options = PdfOptionsFrom(value);
+            lw::ppocr::pdf::Document document(pdf_data, pdf_size, pdf_options);
+            const uint32_t total_pages = document.page_count();
+            if (pdf_options.first_page >= total_pages) {
+                throw std::invalid_argument("PDF first_page is out of range");
+            }
+            const uint32_t available = total_pages - pdf_options.first_page;
+            const uint32_t requested = pdf_options.page_count == 0
+                ? available : std::min(pdf_options.page_count, available);
+            if (requested == 0 || requested > pdf_options.max_pages) {
+                throw LimitExceeded("PDF exceeds max_pages");
+            }
+
+            json pages = json::array();
+            uint64_t total_pixels = 0;
+            const auto overall_start = Clock::now();
+            for (uint32_t offset = 0; offset < requested; ++offset) {
+                const uint32_t page_index = pdf_options.first_page + offset;
+                const bool initial_extract = pdf_options.mode != PdfMode::Ocr;
+                const bool initial_render = pdf_options.mode == PdfMode::Ocr ||
+                    pdf_options.mode == PdfMode::Hybrid;
+                auto page = document.process_page(page_index, initial_extract,
+                    initial_render);
+                std::string method;
+                if (pdf_options.mode == PdfMode::Text) {
+                    method = "pdf_text";
+                } else if (pdf_options.mode == PdfMode::Ocr) {
+                    method = "ocr";
+                } else if (pdf_options.mode == PdfMode::Hybrid) {
+                    method = "hybrid";
+                } else if (page.text_layer_usable && !page.has_large_image) {
+                    method = "pdf_text";
+                } else if (page.text_layer_usable) {
+                    method = "hybrid";
+                } else {
+                    method = "ocr";
+                }
+
+                if (method != "pdf_text" && page.image.empty()) {
+                    // Auto mode already extracted the text layer to classify
+                    // the page. Render the same page without extracting it a
+                    // second time, then retain the classification metadata
+                    // for hybrid output and diagnostics.
+                    auto rendered = document.process_page(page_index, false, true);
+                    rendered.text = std::move(page.text);
+                    rendered.text_layer_usable = page.text_layer_usable;
+                    rendered.has_large_image = page.has_large_image;
+                    rendered.text_extract_ms = page.text_extract_ms;
+                    page = std::move(rendered);
+                }
+                const uint64_t page_pixels = static_cast<uint64_t>(page.width) *
+                    static_cast<uint64_t>(page.height);
+                if (page_pixels > pdf_options.max_page_pixels ||
+                    page_pixels > pdf_options.max_total_pixels - total_pixels) {
+                    throw LimitExceeded("PDF exceeds cumulative pixel limits");
+                }
+                total_pixels += page_pixels;
+
+                json ocr = json::object();
+                if (!page.image.empty()) {
+                    ocr = OcrJson(handle->engine->Run(page.image), page.image,
+                        0.0);
+                }
+                pages.push_back(PdfPageJson(page, ocr, method));
+            }
+            AllocateJson({
+                {"document", {
+                    {"format", "pdf"},
+                    {"page_count", total_pages},
+                    {"processed_pages", requested},
+                    {"dpi", pdf_options.dpi}
+                }},
+                {"pages", std::move(pages)},
+                {"timing_ms", {
+                    {"server_total", Milliseconds(overall_start, Clock::now())}
+                }}
+            }, result_json_utf8, result_json_length);
+        } catch (const LimitExceeded&) {
+            throw;
+        } catch (const std::bad_alloc&) {
+            throw;
+        } catch (const std::exception& exception) {
+            throw DocumentError(exception.what());
+        }
+    }, LW_PPOCR_STATUS_DOCUMENT_ERROR);
 }
 
 lw_ppocr_status LW_PPOCR_CALL lw_ppocr_recognize_encoded(
