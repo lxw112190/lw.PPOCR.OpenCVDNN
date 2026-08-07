@@ -25,9 +25,9 @@ extern "C" {
 
 #define LW_PPOCR_API_VERSION 1u
 #define LW_PPOCR_VERSION_MAJOR 1u
-#define LW_PPOCR_VERSION_MINOR 0u
+#define LW_PPOCR_VERSION_MINOR 1u
 #define LW_PPOCR_VERSION_PATCH 0u
-#define LW_PPOCR_VERSION_STRING "1.0.0"
+#define LW_PPOCR_VERSION_STRING "1.1.0"
 #define LW_PPOCR_PRODUCT_NAME "lw.PPOCR.OpenCVDNN"
 
 typedef struct lw_ppocr_engine* lw_ppocr_handle;

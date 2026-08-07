@@ -6,7 +6,7 @@ A small, cross-platform PP-OCR inference project powered exclusively by **OpenCV
 
 The bundled model is PP-OCRv6 Tiny Chinese and inference currently targets the CPU. Paddle Runtime, ONNX Runtime, DirectML, OpenVINO, and TensorRT are not required.
 
-> Current stable release: `v1.0.0`. C ABI v1, HTTP API v1,
+> Current stable release: `v1.1.0`. C ABI v1, HTTP API v1,
 > configuration Schema v1, JSONL log Schema v1, and model-manifest Schema v1
 > are formally frozen. The 1.x line preserves backward compatibility;
 > breaking changes require a new major version or a versioned v2 contract.
@@ -87,12 +87,12 @@ Open <http://127.0.0.1:8787/>. Startup output always shows the author, QQ contac
 
 ### Docker / Docker Compose
 
-`v1.0.0` provides the stable `linux/amd64` image. After the tag is published:
+`v1.1.0` provides the stable `linux/amd64` image. After the tag is published:
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.1.0
 ```
 
 With Compose:
@@ -224,7 +224,7 @@ Linux and macOS CI save OpenCV only after a successful build and install, while 
 
 ## Quality, security, and compatibility documents
 
-- [v1.0.0 stable release notes](docs/releases/v1.0.0.md)
+- [v1.1.0 stable release notes](docs/releases/v1.1.0.md)
 - [v1.0.0-rc.3 release candidate notes](docs/releases/v1.0.0-rc.3.md)
 - [v1.0.0-rc.2 release candidate notes](docs/releases/v1.0.0-rc.2.md)
 - [Compatibility matrix](docs/COMPATIBILITY.md)

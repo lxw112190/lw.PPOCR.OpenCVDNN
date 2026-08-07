@@ -6,7 +6,7 @@
 
 当前内置模型为 PP-OCRv6 Tiny Chinese，推理设备为 CPU。项目不依赖 Paddle Runtime、ONNX Runtime、DirectML、OpenVINO 或 TensorRT。
 
-> 当前正式版本：`v1.0.0`。C ABI v1、HTTP API v1、配置 Schema v1、JSONL
+> 当前正式版本：`v1.1.0`。C ABI v1、HTTP API v1、配置 Schema v1、JSONL
 > 日志 Schema v1 与模型清单 Schema v1 已正式冻结；整个 1.x 系列保持向后兼容，
 > 破坏性修改必须进入新的主版本或 v2 契约。正式生产部署前仍应在目标环境验证发布包。
 
@@ -82,12 +82,12 @@ chmod +x run-http-service.sh
 
 ### Docker / Docker Compose
 
-`v1.0.0` 提供正式的 `linux/amd64` 容器镜像。标签发布后可直接运行：
+`v1.1.0` 提供正式的 `linux/amd64` 容器镜像。标签发布后可直接运行：
 
 ```bash
 docker run -d --name lw-ppocr --restart unless-stopped \
   -p 8787:8787 -v lw-ppocr-logs:/data/logs \
-  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.0.0
+  ghcr.io/lxw112190/lw.ppocr.opencvdnn:1.1.0
 ```
 
 使用 Compose：
@@ -247,7 +247,7 @@ Linux 与 macOS CI 会在 OpenCV 编译安装成功后保存缓存，后续相�
 
 ## 质量、安全与兼容性文档
 
-- [v1.0.0 正式版说明](docs/releases/v1.0.0.md)
+- [v1.1.0 正式版说明](docs/releases/v1.1.0.md)
 - [v1.0.0-rc.3 发布候选说明](docs/releases/v1.0.0-rc.3.md)
 - [v1.0.0-rc.2 发布候选说明](docs/releases/v1.0.0-rc.2.md)
 - [兼容矩阵](docs/COMPATIBILITY.md)

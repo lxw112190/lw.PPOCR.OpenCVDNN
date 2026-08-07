@@ -2,13 +2,13 @@
 
 ## Supported versions / 支持版本
 
-`v1.0.0` is the first stable release. Security fixes target the latest
+`v1.1.0` is the current stable release. Security fixes target the latest
 published 1.x minor release while the frozen C ABI v1 and machine-readable v1
 contracts remain backward compatible throughout the 1.x line. This policy is
 not an indefinite LTS commitment; supported versions may change with a future
 major release and will be documented here before that change.
 
-`v1.0.0` 是首个正式稳定版本。安全修复面向最新发布的 1.x 次版本提供，同时在整个
+`v1.1.0` 是当前正式稳定版本。安全修复面向最新发布的 1.x 次版本提供，同时在整个
 1.x 周期内保持已冻结的 C ABI v1 与机器可读 v1 契约向后兼容。这不是无限期 LTS
 承诺；若未来主版本调整支持范围，会先在本文档中明确说明。
 

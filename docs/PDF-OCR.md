@@ -17,7 +17,7 @@ approved DLL explicitly:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/package_windows.ps1 `
-  -PackageDir dist/lw.PPOCR.OpenCVDNN-v1.0.0-windows-x64 `
+  -PackageDir dist/lw.PPOCR.OpenCVDNN-v1.1.0-windows-x64 `
   -PdfiumDll C:/path/to/pdfium.dll
 ```
 
@@ -33,9 +33,9 @@ generally thread-safe.
 Linux and macOS packages accept an optional PDFium runtime at packaging time:
 
 ```bash
-bash scripts/package_linux.sh build/ci .ci/opencv-5.0.0 dist 1.0.0 x64 \
+bash scripts/package_linux.sh build/ci .ci/opencv-5.0.0 dist 1.1.0 x64 \
   /opt/pdfium/x86_64/libpdfium.so
-bash scripts/package_macos.sh build/ci .ci/opencv-5.0.0 dist 1.0.0 \
+bash scripts/package_macos.sh build/ci .ci/opencv-5.0.0 dist 1.1.0 \
   /opt/pdfium/arm64/libpdfium.dylib
 ```
 

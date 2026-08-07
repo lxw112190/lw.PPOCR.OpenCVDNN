@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 # CMake requires a numeric project version. The public pre-release suffix is
 # carried by LW_PPOCR_VERSION_STRING in include/lw/ppocr.h.
-project(lw.PPOCR.OpenCVDNN VERSION 1.0.0 LANGUAGES C CXX)
+project(lw.PPOCR.OpenCVDNN VERSION 1.1.0 LANGUAGES C CXX)
 
 option(LW_PPOCR_BUILD_HTTP_SERVICE "Build the cpp-httplib HTTP service" ON)
 option(LW_PPOCR_BUILD_EXAMPLES "Build native examples" ON)
@@ -272,6 +272,7 @@ install(FILES
     docs/releases/v1.0.0-rc.2.md
     docs/releases/v1.0.0-rc.3.md
     docs/releases/v1.0.0.md
+    docs/releases/v1.1.0.md
     DESTINATION docs/releases)
 install(FILES tests/abi/exports-v1.txt DESTINATION docs)
 install(DIRECTORY tests/fixtures DESTINATION tests)

@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_VERSION: 1.0.0
+  PACKAGE_VERSION: 1.1.0
   OPENCV_WINDOWS_SHA256: 9c6c1fcea58acdf06edba13148b2246e00c2658143fa51e61ecd370db8c39f63
 
 jobs:
