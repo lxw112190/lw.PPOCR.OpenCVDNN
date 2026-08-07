@@ -4,6 +4,6 @@
   "files": {
       "access-log-v1.schema.json": "cdac5610365214e86f5251ad853bb19432395c5dd8c406ff452fae1c6d421efe",
       "http-api-v1.openapi.json": "d919b1d62b83bca8296318323321b1386fdbdf60c7d02a85d9c5b2ac95c57b42",
-      "http-service-config-v1.schema.json": "528f3ea98f3606b7719a335c3f760619c2f1bb4b80c4a0dcd9d56ff8c753b362"
+      "http-service-config-v1.schema.json": "56fd4ac7b4ee25ef8ba08aacc143034fa01db9d431315ea4d634b82a7d724d05"
   }
 }

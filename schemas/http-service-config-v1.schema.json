@@ -36,6 +36,19 @@
     "max_pdf_pages": {"type": "integer", "minimum": 1, "maximum": 1000},
     "max_pdf_page_pixels": {"type": "integer", "minimum": 1, "maximum": 200000000},
     "max_pdf_total_pixels": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+    "cors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "allowed_origins": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 2048}
+        }
+      }
+    },
     "logging": {"$ref": "#/$defs/logging"}
   },
   "$defs": {

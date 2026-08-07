@@ -29,6 +29,10 @@
   "max_pdf_pages": 10,
   "max_pdf_page_pixels": 25000000,
   "max_pdf_total_pixels": 100000000,
+  "cors": {
+    "enabled": false,
+    "allowed_origins": []
+  },
   "logging": {
     "enabled": true,
     "level": "info",

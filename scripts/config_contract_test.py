@@ -69,6 +69,12 @@ def main() -> int:
     add("batch-pixels-below-single-image-limit",
         lambda value: value.update(max_batch_total_pixels=1),
         "configuration contains an out-of-range value")
+    add("duplicate-cors-origin",
+        lambda value: value["cors"].update(
+            enabled=True,
+            allowed_origins=["https://client.example",
+                             "https://client.example"]),
+        "CORS allowed_origins entries must be unique")
 
     environment = os.environ.copy()
     environment.update({

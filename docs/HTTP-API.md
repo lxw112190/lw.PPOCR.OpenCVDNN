@@ -12,6 +12,39 @@ Default base URL: `http://127.0.0.1:8787`
 If `api_key` is configured, add `X-API-Key: <secret>` to every OCR request.
 `GET /health` and static web assets remain public for local readiness checks.
 
+### Browser cross-origin requests
+
+CORS is disabled by default. JSON is the primary configuration mechanism;
+environment variables are optional deployment-time overrides. Configure it in
+`http-service.json`:
+
+```json
+"cors": {
+  "enabled": true,
+  "allowed_origins": ["https://ocr.example.com", "http://localhost:5173"]
+}
+```
+
+If a deployment needs to override the JSON file without editing it, set these
+environment variables before starting the service:
+
+```powershell
+$env:LW_PPOCR_CORS_ENABLED = "true"
+$env:LW_PPOCR_CORS_ALLOWED_ORIGINS = "https://ocr.example.com,http://localhost:5173"
+```
+
+`LW_PPOCR_CORS_ENABLED` and `LW_PPOCR_CORS_ALLOWED_ORIGINS` override the JSON
+values when present. Setting the origins environment variable enables CORS when
+it contains at least one origin; setting `LW_PPOCR_CORS_ENABLED=false` disables
+it even when origins are present in JSON.
+
+The service handles `OPTIONS` preflight requests and returns CORS headers for
+the allowed origins. `Content-Type` and `X-API-Key` request headers are
+allowed, and `X-Request-ID` plus `X-LW-PPOCR-API-Version` are exposed. Use `*`
+only for an intentionally public service; it cannot be combined with other
+origins. The JSON field is additive, so existing v1 configuration files
+without `cors` remain valid and CORS-disabled.
+
 ## `GET /health`
 
 Returns service readiness, product version, backend, whether an API Key is

@@ -72,6 +72,9 @@ def main() -> int:
     config_path = package / f".http-contract-{os.getpid()}.json"
     config_path.write_text(json.dumps(
         config, ensure_ascii=False, indent=2), encoding="utf-8")
+    process_environment = os.environ.copy()
+    process_environment["LW_PPOCR_CORS_ALLOWED_ORIGINS"] = \
+        "https://client.example"
 
     process = None
     output = ""
@@ -80,7 +83,7 @@ def main() -> int:
         process = subprocess.Popen(
             [str(executable), "--config", str(config_path)], cwd=package,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            encoding="utf-8", errors="replace")
+            encoding="utf-8", errors="replace", env=process_environment)
         base_url = f"http://127.0.0.1:{args.port}"
         for _ in range(160):
             if process.poll() is not None:
@@ -147,6 +150,21 @@ def main() -> int:
         validate_headers(headers, malformed)
         validate(malformed, schemas["ErrorResponse"], openapi)
         validated.append("error-invalid-json")
+
+        preflight = urllib.request.Request(
+            base_url + "/api/ocr", method="OPTIONS",
+            headers={
+                "Origin": "https://client.example",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type, x-api-key",
+            })
+        with urllib.request.urlopen(preflight, timeout=10) as response:
+            assert response.status == 204
+            assert response.headers.get("Access-Control-Allow-Origin") == \
+                "https://client.example"
+            assert response.headers.get("Access-Control-Allow-Methods") == \
+                "GET, POST, OPTIONS"
+        validated.append("cors-preflight")
 
         assert process.poll() is None
         print(json.dumps({

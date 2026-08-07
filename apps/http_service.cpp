@@ -83,6 +83,8 @@ struct ServiceConfig {
     size_t max_pdf_pages = 10;
     uint64_t max_pdf_page_pixels = 25000000;
     uint64_t max_pdf_total_pixels = 100000000;
+    bool cors_enabled = false;
+    std::vector<std::string> cors_allowed_origins;
     lw::ppocr::http::LoggingConfig logging;
 };
 
@@ -319,6 +321,14 @@ void ApplyEnvironmentOverrides(ServiceConfig& config, const fs::path& base) {
         "LW_PPOCR_MAX_PDF_PAGE_PIXELS", config.max_pdf_page_pixels);
     config.max_pdf_total_pixels = EnvironmentUnsigned(
         "LW_PPOCR_MAX_PDF_TOTAL_PIXELS", config.max_pdf_total_pixels);
+    if (const char* value = std::getenv("LW_PPOCR_CORS_ALLOWED_ORIGINS")) {
+        config.cors_allowed_origins = SplitCommaSeparated(value);
+        config.cors_enabled = !config.cors_allowed_origins.empty();
+    }
+    if (std::getenv("LW_PPOCR_CORS_ENABLED") != nullptr) {
+        config.cors_enabled = EnvironmentBoolean(
+            "LW_PPOCR_CORS_ENABLED", config.cors_enabled);
+    }
     config.logging.enabled = EnvironmentBoolean(
         "LW_PPOCR_LOGGING_ENABLED", config.logging.enabled);
     config.logging.console = EnvironmentBoolean(
@@ -377,7 +387,7 @@ ServiceConfig LoadConfig(const fs::path& path) {
         "engine_wait_timeout_ms", "max_request_bytes", "max_image_pixels",
         "max_batch_images", "max_batch_total_pixels",
         "max_batch_decoded_bytes", "pdf_dpi", "max_pdf_pages",
-        "max_pdf_page_pixels", "max_pdf_total_pixels", "logging"
+        "max_pdf_page_pixels", "max_pdf_total_pixels", "cors", "logging"
     }, "HTTP service configuration");
     if (!document.contains("schema_version")) {
         throw std::runtime_error(
@@ -454,6 +464,28 @@ ServiceConfig LoadConfig(const fs::path& path) {
         "max_pdf_page_pixels", config.max_pdf_page_pixels);
     config.max_pdf_total_pixels = document.value(
         "max_pdf_total_pixels", config.max_pdf_total_pixels);
+    if (document.contains("cors")) {
+        const json& cors = document.at("cors");
+        RejectUnknownProperties(cors, {"enabled", "allowed_origins"},
+            "cors configuration");
+        config.cors_enabled = cors.value("enabled", config.cors_enabled);
+        if (cors.contains("allowed_origins")) {
+            const json& origins = cors.at("allowed_origins");
+            if (!origins.is_array()) {
+                throw std::runtime_error(
+                    "cors.allowed_origins must be an array");
+            }
+            config.cors_allowed_origins.clear();
+            for (const json& origin : origins) {
+                if (!origin.is_string()) {
+                    throw std::runtime_error(
+                        "cors.allowed_origins entries must be strings");
+                }
+                config.cors_allowed_origins.push_back(
+                    origin.get<std::string>());
+            }
+        }
+    }
 
     if (document.contains("logging")) {
         const json& logging = document.at("logging");
@@ -569,6 +601,38 @@ ServiceConfig LoadConfig(const fs::path& path) {
                 "logging.trusted_proxies must contain unique strings of 1 to 64 characters");
         }
     }
+    if (config.cors_allowed_origins.size() > 64) {
+        throw std::runtime_error(
+            "LW_PPOCR_CORS_ALLOWED_ORIGINS must contain at most 64 origins");
+    }
+    if (config.cors_enabled && config.cors_allowed_origins.empty()) {
+        throw std::runtime_error(
+            "cors.enabled requires at least one allowed origin");
+    }
+    const bool cors_wildcard = std::find(
+        config.cors_allowed_origins.begin(),
+        config.cors_allowed_origins.end(), "*") !=
+        config.cors_allowed_origins.end();
+    if (cors_wildcard && config.cors_allowed_origins.size() != 1) {
+        throw std::runtime_error(
+            "CORS wildcard origin cannot be combined with other origins");
+    }
+    for (const std::string& origin : config.cors_allowed_origins) {
+        if (origin.empty() || origin.size() > 2048) {
+            throw std::runtime_error(
+                "CORS origins must contain 1 to 2048 characters");
+        }
+    }
+    for (size_t index = 0; index < config.cors_allowed_origins.size();
+         ++index) {
+        if (std::find(config.cors_allowed_origins.begin(),
+                      config.cors_allowed_origins.begin() + index,
+                      config.cors_allowed_origins[index]) !=
+            config.cors_allowed_origins.begin() + index) {
+            throw std::runtime_error(
+                "CORS allowed_origins entries must be unique");
+        }
+    }
 
     if (config.port < 1 || config.port > 65535 ||
         config.worker_threads < 1 || config.worker_threads > 128 ||
@@ -650,6 +714,48 @@ void SetJson(httplib::Response& response, const json& value, int status = 200) {
     response.set_content(
         value.dump(-1, ' ', false, json::error_handler_t::replace),
         "application/json; charset=utf-8");
+}
+
+bool CorsOriginAllowed(const ServiceConfig& config,
+                       const std::string& origin) {
+    return config.cors_enabled && !origin.empty() &&
+        (std::find(config.cors_allowed_origins.begin(),
+            config.cors_allowed_origins.end(), "*") !=
+            config.cors_allowed_origins.end() ||
+         std::find(config.cors_allowed_origins.begin(),
+            config.cors_allowed_origins.end(), origin) !=
+            config.cors_allowed_origins.end());
+}
+
+void ApplyCorsHeaders(const ServiceConfig& config,
+                      const httplib::Request& request,
+                      httplib::Response& response,
+                      bool preflight) {
+    const std::string origin = request.get_header_value("Origin");
+    if (!CorsOriginAllowed(config, origin)) return;
+    const bool wildcard = std::find(config.cors_allowed_origins.begin(),
+        config.cors_allowed_origins.end(), "*") !=
+        config.cors_allowed_origins.end();
+    response.set_header("Access-Control-Allow-Origin",
+        wildcard ? "*" : origin);
+    if (!wildcard) response.set_header("Vary", "Origin");
+    response.set_header("Access-Control-Expose-Headers",
+        "X-Request-ID, X-LW-PPOCR-API-Version");
+    if (preflight) {
+        response.set_header("Access-Control-Allow-Methods",
+            "GET, POST, OPTIONS");
+        response.set_header("Access-Control-Allow-Headers",
+            "Content-Type, X-API-Key");
+        response.set_header("Access-Control-Max-Age", "600");
+    }
+}
+
+bool IsCorsMethodAllowed(std::string method) {
+    std::transform(method.begin(), method.end(), method.begin(),
+        [](unsigned char character) {
+            return static_cast<char>(std::toupper(character));
+        });
+    return method == "GET" || method == "POST" || method == "OPTIONS";
 }
 
 json ErrorResponse(
@@ -1101,6 +1207,17 @@ void HandlePdfApi(const ServiceConfig& config, EnginePool& engines,
 void PrintStartupInfo(const ServiceConfig& config) {
     const size_t max_http_threads =
         config.worker_threads + config.max_queued_requests;
+    std::string cors_summary = "disabled / 未启用";
+    if (config.cors_enabled && !config.cors_allowed_origins.empty()) {
+        cors_summary = std::to_string(config.cors_allowed_origins.size()) +
+            " configured [";
+        for (size_t index = 0; index < config.cors_allowed_origins.size();
+             ++index) {
+            if (index != 0) cors_summary += ", ";
+            cors_summary += config.cors_allowed_origins[index];
+        }
+        cors_summary += "]";
+    }
     std::cout
         << "============================================================\n"
         << kProduct << " HTTP Service v" << kVersion << '\n'
@@ -1145,6 +1262,7 @@ void PrintStartupInfo(const ServiceConfig& config) {
         << "  max_pdf_pages: " << config.max_pdf_pages << '\n'
         << "  max_pdf_page_pixels: " << config.max_pdf_page_pixels << '\n'
         << "  max_pdf_total_pixels: " << config.max_pdf_total_pixels << '\n'
+        << "  cors_allowed_origins: " << cors_summary << '\n'
         << "  api_key: " << (config.api_key.empty()
             ? "disabled / 未启用"
             : "configured / 已配置 (value hidden / 明文已隐藏)") << '\n'
@@ -1350,6 +1468,38 @@ int RunServer(const ServiceConfig& config,
     if (!server.set_mount_point("/", config.web_root.u8string())) {
         throw std::runtime_error("unable to mount web_root");
     }
+    server.set_pre_routing_handler([&config](
+        const httplib::Request& request, httplib::Response& response) {
+        if (request.method != "OPTIONS" ||
+            request.get_header_value("Origin").empty()) {
+            return httplib::Server::HandlerResponse::Unhandled;
+        }
+        if (!CorsOriginAllowed(config,
+                request.get_header_value("Origin"))) {
+            response.status = 403;
+            response.set_content("CORS origin is not allowed", "text/plain");
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        const std::string requested_method = request.get_header_value(
+            "Access-Control-Request-Method");
+        if (!requested_method.empty() &&
+            !IsCorsMethodAllowed(requested_method)) {
+            response.status = 405;
+            response.set_content("CORS method is not allowed", "text/plain");
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        ApplyCorsHeaders(config, request, response, true);
+        response.status = 204;
+        return httplib::Server::HandlerResponse::Handled;
+    });
+    server.set_post_routing_handler([&config](
+        const httplib::Request& request, httplib::Response& response) {
+        if (request.method == "OPTIONS" &&
+            !request.get_header_value("Origin").empty()) {
+            return;
+        }
+        ApplyCorsHeaders(config, request, response, false);
+    });
     server.Get("/health", [&config](const httplib::Request&,
                                     httplib::Response& response) {
         const std::string request_id = NewRequestId();
